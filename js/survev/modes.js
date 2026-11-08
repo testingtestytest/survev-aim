@@ -9,7 +9,9 @@
   const SPAWN_MIN_DIST = 6;                     // units: never respawns right on top of you
   const SKIN = '#f8c574';
   const BOT_GUNS = ['m4a1', 'ak47', 'mp5', 'vector', 'm870', 'mosin', 'sv98', 'm249'];
-  const SCOPES = Object.keys(C.scopeZoomRadius);   // 1x 2x 4x 8x 15x, desktop radii from gameConfig
+  // Scope zoom radii from gameConfig. Phones and tablets see further, as in player.ts m_getZoom.
+  const RADII = AT.touch ? C.scopeZoomRadiusMobile : C.scopeZoomRadius;
+  const SCOPES = Object.keys(RADII);             // 1x 2x 4x 8x 15x
   const viewPpu = (w, h, zoom) => (Math.max(Math.min(w, h) * (16 / 9), Math.max(w, h)) * 0.5) / zoom;
   const isDynamic = (cfg) => cfg.botRange === 'dynamic';
   const startDist = (cfg) => (isDynamic(cfg) ? SV.DYNAMIC_SPAWN : cfg.botRange);
@@ -40,7 +42,7 @@
   // How the chosen distance looks on a 16:9 screen with the chosen scope (real scale).
   function pvView(p) {
     const { g, w, h, cfg } = p;
-    const zoom = C.scopeZoomRadius[cfg.scope];
+    const zoom = RADII[cfg.scope];
     const ppu = viewPpu(w, h, zoom);
     miniGround(g, w, h, ppu, w / 2, h / 2);
     const s = p.s; s.t = (s.t || 0) + p.dt;
@@ -219,7 +221,7 @@
   const botRange = { key: 'botRange', label: 'BOT DISTANCE', default: 'dynamic', preview: pvView,
     options: [{ v: 'dynamic', label: 'DYNAMIC' }, { v: 8, label: 'CLOSE' }, { v: 16, label: 'MID' }, { v: 24, label: 'FAR' }, { v: 34, label: 'LONG' }] };
   const scope = { key: 'scope', label: 'SCOPE', default: '1xscope', preview: pvView,
-    options: SCOPES.map((v) => ({ v, label: v.replace('scope', '').toUpperCase() + ` (${C.scopeZoomRadius[v]})` })) };
+    options: SCOPES.map((v) => ({ v, label: v.replace('scope', '').toUpperCase() + ` (${RADII[v]})` })) };
   const popups = { key: 'popups', label: 'DAMAGE NUMBERS', default: 'on',
     preview: pvText(['TRAINING AID', 'NOT IN THE REAL GAME.', 'SHOWS DAMAGE PER HIT,', 'YELLOW = HEADSHOT.']),
     options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] };
@@ -236,7 +238,7 @@
   // ---------- game ----------
   function createGame(cfg, api, kind) {
     const world = new SV.World();
-    const zoom = C.scopeZoomRadius[cfg.scope];
+    const zoom = RADII[cfg.scope];
     const timeline = [];
     const popupsArr = [];
     const st = { shots: 0, hits: 0, heads: 0, dmg: 0, kills: 0, ttk: [], switches: 0, free: 0, deaths: 0, taken: 0,
@@ -346,14 +348,35 @@
       if (l > 0.5) me.dir = { x: dx / l, y: dy / l };
     }
 
+    // Touch input, in the order of survev's game.ts. shootStart stays set while firing, as it does there.
+    const touch = AT.touch ? new SV.Touch({ moveStyle: cfg.touchMove, aimStyle: cfg.touchAim, aimLine: cfg.touchLine === 'on' }) : null;
+    if (touch) SV.preload(['bullets']);
+    function readTouch() {
+      const { W, H } = api.size;
+      const r = touch.update(STEP, W, H);
+      me.input.moveDir = r.move;
+      me.dir = r.aim;
+      me.input.shootHold = r.shoot;
+      if (r.shoot) me.input.shootStart = true;
+    }
+
     let acc = 0;
     return {
       ownHud: true,
+      touch,
+      // A finger came down during the round. True if it pressed a button rather than a stick.
+      touchPress(x, y) {
+        const { W, H } = api.size;
+        const b = SV.touchButton(W, H, x, y, me.activeDef.kind === 'gun');
+        if (b === null) return false;
+        if (b === 'reload') me.tryReload(); else me.switchTo(b);
+        return true;
+      },
       update(dt) {
         acc += dt;
         while (acc >= STEP) {
           acc -= STEP;
-          readInput();
+          if (touch) readTouch(); else readInput();
           if (ai) ai.update(STEP);
           world.update(STEP);
           if (respawnT >= 0 && (respawnT -= STEP) < 0) spawnBot();
@@ -380,13 +403,15 @@
       draw(g) {
         const { W, H } = api.size;
         SV.drawWorld(g, W, H, world, me.pos, zoom, { popups: cfg.popups === 'on' ? popupsArr : null });
+        if (touch) touch.drawAimLine(g, W, H, me, zoom, viewPpu(W, H, zoom));
         const left = api.timeLeft != null ? `TIME ${Math.max(0, api.timeLeft).toFixed(1)}` : `TIME ${world.time.toFixed(1)}`;
         SV.drawHud(g, W, H, me, {
           keyLabels: keyLabels(), time: world.time, scope: cfg.scope.replace('scope', ''),
           topLeft: left,
           topRight: kind === '1v1' ? `KILLS ${st.kills}${cfg.fireBack === 'on' ? '  DEATHS ' + st.deaths : ''}` : `DMG ${Math.round(st.dmg)}`,
-          bot, timeline: kind === 'range' || cfg.timeline === 'on' ? timeline : null,
+          bot, timeline: kind === 'range' || cfg.timeline === 'on' ? timeline : null, touch: !!touch,
         });
+        if (touch) { touch.resize(W, H); touch.drawPads(g); }
       },
       hud: () => [],
       results() {
@@ -408,6 +433,19 @@
     };
   }
 
+  // survev's own touch options, defaults from client/src/config.ts. Hidden on desktop.
+  const touchSettings = () => [
+    { key: 'touchMove', label: 'MOVE STICK', default: 'anywhere', when: () => AT.touch,
+      preview: pvText(['ANYWHERE: IT STARTS WHERE', 'YOUR THUMB LANDS.', 'FIXED: IT STAYS IN ONE SPOT.']),
+      options: [{ v: 'anywhere', label: 'ANYWHERE' }, { v: 'locked', label: 'FIXED' }] },
+    { key: 'touchAim', label: 'AIM STICK', default: 'anywhere', when: () => AT.touch,
+      preview: pvText(['ANYWHERE: IT STARTS WHERE', 'YOUR THUMB LANDS.', 'FIXED: IT STAYS IN ONE SPOT.']),
+      options: [{ v: 'anywhere', label: 'ANYWHERE' }, { v: 'locked', label: 'FIXED' }] },
+    { key: 'touchLine', label: 'AIM LINE', default: 'on', when: () => AT.touch,
+      preview: pvText(['DOTS SHOW WHERE YOU AIM', 'WHILE YOU HOLD THE AIM STICK.']),
+      options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
+  ];
+
   AT.register({
     id: 'sv-range',
     group: 'survev',
@@ -422,6 +460,7 @@
       ...skillSettings('off'),
       ...botArmor(),
       ...adrenaline(),
+      ...touchSettings(),
       scope,
       popups,
       { key: 'duration', label: 'DURATION', default: 60, preview: AT.pv.duration,
@@ -452,8 +491,9 @@
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
       { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'm4a1', only: BOT_GUNS, when: (c) => c.fireBack === 'on' },
       { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
-        preview: pvText(['BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
+        preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
+      ...touchSettings(),
       scope,
       popups,
       { key: 'duration', label: 'DURATION', default: 120, preview: AT.pv.duration,

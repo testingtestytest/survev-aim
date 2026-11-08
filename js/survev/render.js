@@ -243,7 +243,169 @@
     g.fillText(s, x, y);
   }
 
+  // Touch layout, in CSS pixels from survev's mobile rules in client/css/game.css.
+  const T_SLOT_W = 68, T_SLOT_H = 28, T_SLOT_STEP = 35, T_SLOT_RIGHT = 6, T_SLOT_TOP = 92;
+  const T_HEALTH_W = 200, T_HEALTH_H = 18, T_BOTTOM = 6;
+  const T_AMMO_BOTTOM = 78, T_CLIP_W = 60, T_CLIP_H = 32, T_REMAIN_W = 44, T_REMAIN_H = 22;
+  const T_RELOAD_R = 11;
+  const T_HIT_MARGIN = 5;              // tap area beyond the visible slot; the next slot starts 7px away
+  // Where the buttons are, for hit testing. Shared with drawing so they can't disagree.
+  SV.touchLayout = (W, H) => {
+    const clipY = H - T_AMMO_BOTTOM - T_CLIP_H;
+    return {
+      slots: [0, 1, 2].map((k) => ({ x: W - T_SLOT_RIGHT - T_SLOT_W, y: T_SLOT_TOP + k * T_SLOT_STEP, w: T_SLOT_W, h: T_SLOT_H })),
+      clip: { x: W / 2 - T_CLIP_W / 2, y: clipY, w: T_CLIP_W, h: T_CLIP_H },
+      remain: { x: W / 2 + T_CLIP_W / 2 + 4, y: clipY + 10, w: T_REMAIN_W, h: T_REMAIN_H },
+      reload: { x: W / 2 + 92.5, y: clipY + 21, r: T_RELOAD_R },
+    };
+  };
+  // Which button a tap landed on: 0-2 is a weapon slot, 'reload' reloads, null means it's for the sticks.
+  SV.touchButton = (W, H, x, y, hasGun) => {
+    const L = SV.touchLayout(W, H), m = T_HIT_MARGIN;
+    const inside = (r) => x >= r.x - m && x <= r.x + r.w + m && y >= r.y - m && y <= r.y + r.h + m;
+    for (let k = 0; k < 3; k++) if (inside(L.slots[k])) return k;
+    if (!hasGun) return null;
+    if (inside(L.clip) || inside(L.remain) || Math.hypot(x - L.reload.x, y - L.reload.y) <= L.reload.r + m * 2) return 'reload';
+    return null;
+  };
+
+  function drawTouchHud(g, W, H, me, info) {
+    const L = SV.touchLayout(W, H), s = 0.7, pad = 8;
+    const portrait = W < H;
+
+    // weapon slots, right edge
+    L.slots.forEach((r, k) => {
+      const slot = me.slots[k], d = SV.defOf(slot.type), sel = me.cur === k;
+      box(g, r.x, r.y, r.w, r.h, sel ? 0.5 : 0.24);
+      if (sel) { g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2; g.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2); }
+      if (!d) return;
+      const im = SV.img(d.loot);
+      if (im.complete && im.naturalWidth) {
+        g.globalAlpha = sel ? 1 : 0.6;
+        g.drawImage(im, r.x + 2, r.y, 28, 28);
+        g.globalAlpha = 1;
+      }
+      g.font = `700 10px ${FONT}`;
+      const name = d.name.toUpperCase(), size = 10 * Math.min(1, (r.w - 6) / g.measureText(name).width);
+      text(g, name, r.x + r.w - 4, r.y + r.h - 5, size, { align: 'right' });
+      if (d.kind === 'gun' && !sel) text(g, String(slot.ammo), r.x + r.w - 4, r.y + 10, 9, { align: 'right', color: 'rgba(255,255,255,0.8)' });
+      const maxCd = Math.max(d.switchDelay, d.kind === 'gun' ? d.fireDelay : d.attack.cooldownTime);
+      if (slot.cooldown > 0) {
+        g.fillStyle = sel ? '#ff6a00' : 'rgba(255,106,0,0.6)';
+        g.fillRect(r.x, r.y + r.h - 3, r.w * Math.min(1, slot.cooldown / maxCd), 3);
+      }
+    });
+
+    // free switch, directly above the slots
+    {
+      const r = L.slots[0], ready = me.freeSwitchTimer <= 0, y = r.y - 22;
+      box(g, r.x, y, r.w, 18, 0.24);
+      g.fillStyle = ready ? '#7dff5a' : 'rgba(255,255,255,0.35)';
+      g.beginPath(); g.arc(r.x + 8, y + 9, 3.5, 0, Math.PI * 2); g.fill();
+      text(g, ready ? 'FREE' : `${Math.max(0, me.freeSwitchTimer).toFixed(2)}S`, r.x + 15, y + 13, 11, { color: ready ? '#fff' : 'rgba(255,255,255,0.7)' });
+    }
+
+    // health and adrenaline, bottom-center
+    const hbX = (W - T_HEALTH_W) / 2, hbY = H - T_BOTTOM - T_HEALTH_H;
+    box(g, hbX, hbY, T_HEALTH_W, T_HEALTH_H, 0.4);
+    const hp = me.health / C.player.health;
+    g.fillStyle = hp > 0.25 ? '#ffffff' : hp > 0 ? '#ff2828' : 'transparent';
+    g.fillRect(hbX + 2, hbY + 2, (T_HEALTH_W - 4) * hp, T_HEALTH_H - 4);
+    text(g, me.health.toFixed(1), W / 2, hbY + T_HEALTH_H / 2, 12, { align: 'center', base: 'middle', color: hp > 0.55 ? '#000' : '#fff', shadow: false });
+    [[C.armor.helmetSkin[me.helmet], me.helmet], [C.armor.chestSkin[me.chest], me.chest]].forEach(([skin, lvl], k) => {
+      if (!skin) return;
+      const sz = 30, x = hbX - (k + 1) * (sz + 4), y = H - T_BOTTOM - sz;
+      box(g, x, y, sz, sz, 0.4);
+      const im = SV.img(skin.loot);
+      if (im.complete && im.naturalWidth) g.drawImage(im, x + 2, y + 2, sz - 4, sz - 4);
+      text(g, String(lvl), x + sz - 3, y + sz - 3, 11, { align: 'right' });
+    });
+    if (me.boost > 0) {
+      const bp = C.player.boostBreakpoints, total = bp.reduce((a, b) => a + b, 0);
+      const colors = ['#ff901a', '#ff751a', '#ff6616', '#ff5600'];
+      const gap = 2, usable = T_HEALTH_W - gap * (bp.length - 1);
+      let bx = hbX, left = me.boost / 100;
+      bp.forEach((b, i) => {
+        const frac = b / total, w = usable * frac;
+        box(g, bx, hbY - 11, w, 8, 0.4);
+        g.fillStyle = colors[i];
+        g.fillRect(bx, hbY - 11, w * Math.max(0, Math.min(1, left / frac)), 8);
+        left = Math.max(left - frac, 0);
+        bx += w + gap;
+      });
+    }
+
+    // ammo and the reload button; tapping any of them reloads, as in the game
+    const d = me.activeDef;
+    if (d.kind === 'gun') {
+      const ammo = me.slots[me.cur].ammo;
+      box(g, L.clip.x, L.clip.y, L.clip.w, L.clip.h, 0.4);
+      text(g, String(ammo), W / 2, L.clip.y + L.clip.h - 6, 28, { align: 'center', color: ammo === 0 ? '#ff4040' : '#fff' });
+      box(g, L.remain.x, L.remain.y, L.remain.w, L.remain.h, 0.4);
+      text(g, '/' + d.maxClip, L.remain.x + L.remain.w / 2, L.remain.y + L.remain.h - 6, 14, { align: 'center' });
+      g.fillStyle = 'rgba(0,0,0,0.4)';
+      g.beginPath(); g.arc(L.reload.x, L.reload.y, L.reload.r, 0, Math.PI * 2); g.fill();
+      const im = SV.img('bullets');
+      if (im.complete && im.naturalWidth) g.drawImage(im, L.reload.x - 7, L.reload.y - 7, 14, 14);
+    }
+    if (me.action) {
+      const w = 130, x = (W - w) / 2, y = L.clip.y - 12;
+      text(g, 'RELOADING', W / 2, y - 4, 11, { align: 'center' });
+      box(g, x, y, w, 6, 0.4);
+      g.fillStyle = '#fff';
+      g.fillRect(x, y, w * Math.min(1, me.action.time / me.action.duration), 6);
+    }
+
+    // The rest is the trainer's own: score and bot health top-center, speed and timeline at the left.
+    const w = Math.min(320 * s, W - 2 * (T_SLOT_W + T_SLOT_RIGHT) - 40), x = (W - w) / 2, y = pad;
+    {
+      const r = 21, cx = x - r - 6, cy = y + r;
+      g.fillStyle = 'rgba(0,0,0,0.24)';
+      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+      text(g, info.scope, cx, cy + 6, 18, { align: 'center' });
+      box(g, x, y, w, 22, 0.24);
+      text(g, info.topLeft, x + 6, y + 16, 12);
+      text(g, info.topRight, x + w - 6, y + 16, 12, { align: 'right' });
+      if (info.bot) {
+        const by = y + 26, bh2 = 15;
+        box(g, x, by, w, bh2, 0.4);
+        g.fillStyle = '#ff4a3a';
+        g.fillRect(x + 2, by + 2, (w - 4) * Math.max(0, info.bot.health / C.player.health), bh2 - 4);
+        text(g, info.bot.health.toFixed(1), x + w / 2, by + bh2 / 2, 11, { align: 'center', base: 'middle' });
+        const gear = [info.bot.helmet ? `HELMET ${info.bot.helmet}` : '', info.bot.chest ? `VEST ${info.bot.chest}` : '',
+          info.bot.boost > 0 ? `ADRENALINE ${Math.round(info.bot.boost)}` : ''].filter(Boolean).join(' · ');
+        text(g, gear || 'NO ARMOR', x + w / 2, by + bh2 + 12, 10, { align: 'center', color: 'rgba(255,255,255,0.85)' });
+      }
+    }
+    const spdY = portrait ? y + 70 : pad, spd = me.calcSpeed(), slowed = me.shotSlowdownTimer > 0;
+    box(g, pad, spdY, 92, 20, 0.24);
+    text(g, `SPEED ${spd.toFixed(1)}`, pad + 6, spdY + 14, 12, { color: slowed ? '#ff6a00' : '#fff' });
+    if (info.timeline) drawTimeline(g, info, pad, spdY + 26, Math.min(380 * s, W * 0.5), 74 * s, s);
+  }
+
+  // Last 5s of shots and switches.
+  function drawTimeline(g, info, x, y, w, h, s) {
+    const span = 5, now = info.time;
+    box(g, x, y, w, h, 0.3);
+    text(g, 'LAST 5S', x + 8 * s, y + 15 * s, 11 * s, { color: 'rgba(255,255,255,0.7)' });
+    const T = (t) => x + w - ((now - t) / span) * w;
+    for (const e of info.timeline) {
+      if (now - e.t > span) continue;
+      const ex = T(e.t);
+      if (e.type === 'shot') {
+        g.fillStyle = e.slot === 0 ? '#ffffff' : e.slot === 1 ? '#ffb35a' : '#9fd8ff';
+        g.fillRect(ex - 1.5 * s, y + 22 * s, 3 * s, 26 * s);
+        if (e.hit) { g.fillStyle = '#7dff5a'; g.fillRect(ex - 3 * s, y + 18 * s, 6 * s, 4 * s); }
+      } else if (e.type === 'switch') {
+        g.fillStyle = e.free ? '#7dff5a' : '#ff4a3a';
+        g.fillRect(ex - 1 * s, y + 52 * s, 2 * s, 16 * s);
+        text(g, e.delay.toFixed(2), ex + 3 * s, y + 66 * s, 11 * s, { color: e.free ? '#7dff5a' : '#ff8070' });
+      }
+    }
+  }
+
   SV.drawHud = (g, W, H, me, info) => {
+    if (info.touch) return drawTouchHud(g, W, H, me, info);
     const s = Math.max(0.75, Math.min(1.25, H / 900));    // UI scale
     const pad = 14 * s;
 
@@ -372,24 +534,6 @@
     }
 
     // timeline (last 5s of shots/switches), bottom-left
-    if (info.timeline) {
-      const w = 380 * s, h = 74 * s, x = pad, y = H - pad - h, span = 5, now = info.time;
-      box(g, x, y, w, h, 0.3);
-      text(g, 'LAST 5S', x + 8 * s, y + 15 * s, 11 * s, { color: 'rgba(255,255,255,0.7)' });
-      const T = (t) => x + w - ((now - t) / span) * w;
-      for (const e of info.timeline) {
-        if (now - e.t > span) continue;
-        const ex = T(e.t);
-        if (e.type === 'shot') {
-          g.fillStyle = e.slot === 0 ? '#ffffff' : e.slot === 1 ? '#ffb35a' : '#9fd8ff';
-          g.fillRect(ex - 1.5 * s, y + 22 * s, 3 * s, 26 * s);
-          if (e.hit) { g.fillStyle = '#7dff5a'; g.fillRect(ex - 3 * s, y + 18 * s, 6 * s, 4 * s); }
-        } else if (e.type === 'switch') {
-          g.fillStyle = e.free ? '#7dff5a' : '#ff4a3a';
-          g.fillRect(ex - 1 * s, y + 52 * s, 2 * s, 16 * s);
-          text(g, e.delay.toFixed(2), ex + 3 * s, y + 66 * s, 11 * s, { color: e.free ? '#7dff5a' : '#ff8070' });
-        }
-      }
-    }
+    if (info.timeline) drawTimeline(g, info, pad, H - pad - 74 * s, 380 * s, 74 * s, s);
   };
 })();

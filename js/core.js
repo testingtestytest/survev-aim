@@ -2,6 +2,10 @@
 (function () {
   const AT = (window.AT = { modes: [] });
 
+  // Phones and tablets only, the same test as survev's device.ts. A touchscreen laptop stays a desktop.
+  AT.touch = typeof document !== 'undefined' && (/android|iphone|ipod|ipad/i.test(navigator.userAgent)
+    || (/macintosh/i.test(navigator.userAgent) && 'ontouchend' in document));
+
   AT.COLORS = { bg: '#FFFFFF', fg: '#000000', accent: '#FF6A00' };
   AT.register = (mode) => AT.modes.push(mode);
 

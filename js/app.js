@@ -15,6 +15,7 @@
   let W = 0, H = 0, dpr = 1;
   function resize() {
     dpr = window.devicePixelRatio || 1;
+    if (AT.touch) dpr = Math.min(dpr, 2);   // phones report up to 4x; drawing that many pixels only costs frame rate
     W = innerWidth; H = innerHeight;
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
@@ -212,6 +213,7 @@
   function show(id) {
     document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
     const inGame = state === 'countdown' || state === 'playing';
+    document.body.classList.toggle('in-game', inGame);
     $('#hud').classList.toggle('on', inGame && !(game && game.ownHud));
     if (!inGame) $('#countdown').textContent = '';
   }
@@ -234,7 +236,7 @@
       c.append(
         el('span', 'idx', String(i + 1).padStart(2, '0')),
         el('span', 'name', m.name),
-        el('span', 'desc', m.description),
+        el('span', 'desc', (AT.touch && m.touchDescription) || m.description),
         el('span', 'best', 'BEST ' + (best ?? '—')),
       );
       c.onclick = () => openSettings(m);
@@ -277,7 +279,7 @@
 
   function renderSettings() {
     $('#set-title').textContent = mode.name;
-    $('#set-desc').textContent = mode.description;
+    $('#set-desc').textContent = (AT.touch && mode.touchDescription) || mode.description;
     // SIMPLE shows the essentials; everything else keeps its value from FULL.
     const active = activeSettings(mode.settings, cfg);
     const viewBox = $('#set-view');
@@ -516,6 +518,57 @@
       start();
     }
   });
+
+  // ---------- touch (phones and tablets only) ----------
+  if (AT.touch) {
+    document.body.classList.add('touch');
+    $('#btn-start').textContent = 'START';
+    $('#btn-retry').textContent = 'RETRY';
+    $('#btn-res-menu').textContent = 'MENU';
+    $('#touch-exit').onclick = goMenu;
+
+    const inRound = () => (state === 'playing' || state === 'countdown') && game;
+    const sticks = () => (inRound() && game.touch) || null;
+    const heldByButton = new Set();    // fingers that pressed a slot or reload, which never become a stick
+
+    // preventDefault also stops the browser sending a fake mouse click, which would count as a second shot.
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        const pad = sticks();
+        if (pad) {
+          if (state === 'playing' && game.touchPress(t.clientX, t.clientY)) heldByButton.add(t.identifier);
+          else pad.start(t.identifier, t.clientX, t.clientY);
+        } else {
+          // Standard modes: a finger is the mouse, and every finger that lands is a click.
+          mouse.x = t.clientX; mouse.y = t.clientY; mouse.down = true;
+          if (state === 'playing') game.mousedown(t.clientX, t.clientY);
+        }
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const pad = sticks();
+      for (const t of e.changedTouches) {
+        if (pad) pad.move(t.identifier, t.clientX, t.clientY);
+        else { mouse.x = t.clientX; mouse.y = t.clientY; }
+      }
+    }, { passive: false });
+    const lift = (e) => {
+      e.preventDefault();
+      const pad = sticks();
+      for (const t of e.changedTouches) {
+        heldByButton.delete(t.identifier);
+        if (pad) pad.end(t.identifier);
+      }
+      if (!pad) {
+        mouse.down = e.touches.length > 0;
+        if (mouse.down) { mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; }
+      }
+    };
+    canvas.addEventListener('touchend', lift, { passive: false });
+    canvas.addEventListener('touchcancel', lift, { passive: false });
+  }
 
   document.querySelectorAll('.tab[data-g]').forEach((b) => {
     b.onclick = () => { menuGroup = b.dataset.g; store.set('tab', menuGroup); renderMenu(); };

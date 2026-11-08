@@ -12,6 +12,7 @@
     id: 'normal',
     name: 'NORMAL',
     description: 'Targets grow, peak, then shrink away. Click them before they vanish. Center hits score more.',
+    touchDescription: 'Targets grow, peak, then shrink away. Tap them before they vanish. Center hits score more.',
     settings: [
       { key: 'difficulty', label: 'DIFFICULTY', default: 'medium',
         preview: (p) => AT.pv.lifecycle(p, DIFF[p.v], SIZE[p.cfg.size] * 0.6),

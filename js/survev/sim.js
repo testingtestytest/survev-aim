@@ -262,6 +262,7 @@
       if (i.left) mx--;
       if (i.right) mx++;
       if (mx && my) { mx *= Math.SQRT1_2; my *= Math.SQRT1_2; }
+      if (i.moveDir) { mx = i.moveDir.x; my = i.moveDir.y; }   // touch stick: any angle (player.ts touchMoveDir)
       this.posOld.x = this.pos.x; this.posOld.y = this.pos.y;
       this.moving = !!(mx || my);
       if (this.moving) {

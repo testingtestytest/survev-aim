@@ -22,6 +22,7 @@
     id: 'tracking',
     name: 'TRACKING',
     description: 'Hold left mouse and keep your crosshair on a moving target. STRAFE moves in snappy 8-way bursts like a survev player.',
+    touchDescription: 'Hold your finger on a moving target. STRAFE moves in snappy 8-way bursts like a survev player.',
     settings: [
       { key: 'pattern', label: 'MOVEMENT', default: 'strafe',
         preview: (p) => previewMotion(p, p.v, SPEED[p.cfg.speed]),
