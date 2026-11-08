@@ -8,7 +8,7 @@
   const SPAWN_PAD = 70, SPAWN_PAD_BOTTOM = 150; // px a respawn stays clear of the screen edge and bottom HUD
   const SPAWN_MIN_DIST = 6;                     // units: never respawns right on top of you
   const SKIN = '#f8c574';
-  const BOT_GUNS = ['m4a1', 'ak47', 'mp5', 'vector', 'm870', 'mosin', 'sv98', 'm249'];
+  const BOT_GUNS = ['m4a1', 'ak47', 'mp5', 'vector', 'm870', 'spas12', 'mosin', 'sv98', 'm249'];
   // Scope zoom radii from gameConfig. Phones and tablets see further, as in player.ts m_getZoom.
   const RADII = AT.touch ? C.scopeZoomRadiusMobile : C.scopeZoomRadius;
   const SCOPES = Object.keys(RADII);             // 1x 2x 4x 8x 15x
@@ -103,6 +103,7 @@
     label(p.g, `TURNS EVERY ${S.run[0]}-${S.run[1]}S`, 8, p.h - 56, { size: 13 });
     label(p.g, `AIM ERROR ±${S.shotErr}°`, 8, p.h - 38, { size: 13 });
     label(p.g, p.cfg.dodge === 'on' ? `TRIES TO DODGE ${Math.round(S.dodge * 100)}% OF SHOTS` : 'DODGING OFF', 8, p.h - 20, { size: 13 });
+    if (p.cfg.botGun2) label(p.g, `QUICKSWITCHES ${Math.round(S.qs * 100)}% OF SHOTS`, 8, p.h - 74, { size: 13 });
   }
   // Roughly which of your guns it can react to at this distance: flight time vs reaction + time to
   // get clear. Reversing direction clears fast, so ~30ms fits the measured dodge rates.
@@ -197,7 +198,6 @@
         AT.pv.text(g, `${body.toFixed(0)} · ${kills} TO KILL${head != null ? ` · HEAD ${head.toFixed(0)}` : ''}`, x, y + 18, { size: 13, weight: 700 });
         y += 48;
       });
-      if (!isBot && cfg.fireBack !== 'on') AT.pv.text(g, 'NEEDS BOT SHOOTS BACK ON', x, h - 24, { size: 12 });
     };
   }
   const armorOptions = [0, 1, 2, 3].map((v) => ({ v, label: v ? 'LVL ' + v : 'NONE' }));
@@ -215,8 +215,8 @@
   // ---------- settings ----------
   const loadout = () => [
     { key: 'primary', label: 'PRIMARY', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true },
-    { key: 'secondary', label: 'SECONDARY', type: 'weapon', pick: 'gun', default: 'sv98', allowNone: true },
-    { key: 'melee', label: 'MELEE', type: 'weapon', pick: 'melee', default: 'fists' },
+    { key: 'secondary', label: 'SECONDARY', type: 'weapon', pick: 'gun', default: 'spas12', allowNone: true },
+    { key: 'melee', label: 'MELEE', type: 'weapon', pick: 'melee', default: 'pan' },
   ];
   const botRange = { key: 'botRange', label: 'BOT DISTANCE', default: 'dynamic', preview: pvView,
     options: [{ v: 'dynamic', label: 'DYNAMIC' }, { v: 8, label: 'CLOSE' }, { v: 16, label: 'MID' }, { v: 24, label: 'FAR' }, { v: 34, label: 'LONG' }] };
@@ -230,7 +230,7 @@
     return {
       distance: cfg.botRange, view, rush: cfg.rush || 'never',
       movement: cfg.botMove === 'still' ? 'strafe' : cfg.botMove || 'strafe', still: cfg.botMove === 'still',
-      fire: fire && cfg.fireBack === 'on', skill: cfg.skill,
+      fire, skill: cfg.skill,
       dodge: cfg.dodge === 'on', dodgeReact: (cfg.dodgeReact || 150) / 1000,
     };
   }
@@ -241,7 +241,7 @@
     const zoom = RADII[cfg.scope];
     const timeline = [];
     const popupsArr = [];
-    const st = { shots: 0, hits: 0, heads: 0, dmg: 0, kills: 0, ttk: [], switches: 0, free: 0, deaths: 0, taken: 0,
+    const st = { shots: 0, hits: 0, heads: 0, dmg: 0, kills: 0, ttk: [], switches: 0, free: 0, deaths: 0, taken: 0, reflects: 0,
       lastShot: [null, null, null], gaps: [], byWeapon: {} };
     const keyLabels = () => [AT.bindLabel('primary'), AT.bindLabel('secondary'), AT.bindLabel('melee')];
     let bot = null, ai = null, botSpawn = 0, respawnT = -1, lastShotT = null, lastHitShot = null;
@@ -262,6 +262,7 @@
         timeline.push({ t: world.time, type: 'switch', free: e.free, delay: e.delay });
       },
       hit(p, target, res, d, shotId) {
+        if (target === p) { st.taken += res.dealt; return; }   // your own bullet, reflected back at you
         // pellets of one shotgun blast count as one hit / one damage number
         const sameShot = shotId != null && shotId === lastHitShot;
         lastHitShot = shotId;
@@ -287,16 +288,26 @@
               head: res.head, t: 0, shotId, gun: d.name, target });
           }
         }
-        if (res.killed) {
-          st.kills++; st.ttk.push(world.time - botSpawn); respawnT = 0.6;
-          // training reward: full health and full reload on kill
-          me.health = C.player.health;
-          me.slots.forEach((s) => { const sd = SV.defOf(s.type); if (sd && sd.kind === 'gun') s.ammo = sd.maxClip; });
-          me.cancelAction(); me.scheduledReload = false;
-        }
+        if (res.killed) botKilled();
+      },
+      reflect() { st.reflects++; },
+    };
+    function botKilled() {
+      st.kills++; st.ttk.push(world.time - botSpawn); respawnT = 0.6;
+      // training reward: full health and full reload on kill
+      me.health = C.player.health;
+      me.slots.forEach((s) => { const sd = SV.defOf(s.type); if (sd && sd.kind === 'gun') s.ammo = sd.maxClip; });
+      me.cancelAction(); me.scheduledReload = false;
+    }
+    const botEvents = {
+      hit(p, target, res) {
+        if (target !== p) { st.taken += res.dealt; return; }
+        // The bot's own shot, sent back by your pan: that damage is yours.
+        st.dmg += res.dealt;
+        if (cfg.popups === 'on') popupsArr.push({ x: target.pos.x, y: target.pos.y - 1.2, dmg: res.dmg, text: res.dmg.toFixed(0), head: res.head, t: 0, target });
+        if (res.killed) botKilled();
       },
     };
-    const botEvents = { hit(p, target, res) { st.taken += res.dealt; } };
 
     const me = world.addPlayer(0, 0, { id: 'me', helmet: cfg.myHelmet || 0, chest: cfg.myVest || 0, boost: cfg.myBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: meEvents });
     SV.preload(C.armor.chestSkin.concat(C.armor.helmetSkin).filter(Boolean).flatMap((a) => [a.sprite, a.loot]));
@@ -326,8 +337,8 @@
       const at = spawnOffset();
       bot = world.addPlayer(me.pos.x + at.x, me.pos.y + at.y,
         { id: 'bot', helmet: cfg.botHelmet || 0, chest: cfg.botVest || 0, boost: cfg.botBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: botEvents });
-      const fire = kind === '1v1' && cfg.fireBack === 'on';
-      bot.setLoadout(fire ? cfg.botGun : '', '', 'fists');
+      const fire = kind === '1v1';
+      bot.setLoadout(fire ? cfg.botGun : '', fire ? cfg.botGun2 || '' : '', 'fists');
       ai = new SV.Bot(bot, me, botOpts(cfg, kind === '1v1', () => {
         const { W, H } = api.size, ppu = viewPpu(W, H, zoom);
         return { hw: W / 2 / ppu - SCREEN_MARGIN, hh: H / 2 / ppu - SCREEN_MARGIN };
@@ -408,8 +419,13 @@
         SV.drawHud(g, W, H, me, {
           keyLabels: keyLabels(), time: world.time, scope: cfg.scope.replace('scope', ''),
           topLeft: left,
-          topRight: kind === '1v1' ? `KILLS ${st.kills}${cfg.fireBack === 'on' ? '  DEATHS ' + st.deaths : ''}` : `DMG ${Math.round(st.dmg)}`,
+          topRight: kind === '1v1' ? `KILLS ${st.kills}  DEATHS ${st.deaths}` : `DMG ${Math.round(st.dmg)}`,
           bot, timeline: kind === 'range' || cfg.timeline === 'on' ? timeline : null, touch: !!touch,
+          boxes: [
+            { label: 'Time', value: Math.ceil(Math.max(0, api.timeLeft != null ? api.timeLeft : world.time)) },
+            kind === '1v1' ? { label: 'Kills', value: st.kills, side: 'left' } : { label: 'Damage', value: Math.round(st.dmg), side: 'left' },
+            ...(kind === '1v1' ? [{ label: 'Deaths', value: st.deaths, side: 'right' }] : []),
+          ],
         });
         if (touch) { touch.resize(W, H); touch.drawPads(g); }
       },
@@ -426,7 +442,8 @@
           ['FREE SWITCHES', AT.pct(st.free, st.switches)],
           ['AVG TIME BETWEEN SHOTS', st.gaps.length ? avg(st.gaps).toFixed(2) + 'S' : '—'],
         ];
-        if (kind === '1v1' && cfg.fireBack === 'on') rows.push(['DEATHS', st.deaths], ['DAMAGE TAKEN', Math.round(st.taken)]);
+        if (kind === '1v1') rows.push(['DEATHS', st.deaths], ['DAMAGE TAKEN', Math.round(st.taken)]);
+        if (me.slots[2].type === 'pan') rows.push(['SHOTS REFLECTED', st.reflects]);
         Object.entries(st.byWeapon).forEach(([n, w]) => rows.push([n.toUpperCase() + ' HITS', `${w.hits}/${w.shots}`]));
         return { score: Math.round(st.dmg) + st.kills * 100 - st.deaths * 100, rows };
       },
@@ -473,8 +490,8 @@
     id: 'sv-1v1',
     group: 'survev',
     name: '1V1',
-    description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee. Optionally it shoots back.',
-    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'fireBack', 'botGun', 'scope', 'duration'],
+    description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee, and it fights back.',
+    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'scope', 'duration'],
     settings: [
       ...loadout(),
       botRange,
@@ -486,10 +503,8 @@
       ...botArmor(),
       ...myArmor(),
       ...adrenaline(),
-      { key: 'fireBack', label: 'BOT SHOOTS BACK', default: 'off',
-        preview: pvText((p) => (p.v === 'on' ? ['BOT FIGHTS BACK', 'YOU HAVE 100 HP.', 'DYING COSTS 100 SCORE', 'AND RESPAWNS YOU.'] : ['PURE AIM PRACTICE', 'THE BOT ONLY MOVES.'])),
-        options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
-      { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'm4a1', only: BOT_GUNS, when: (c) => c.fireBack === 'on' },
+      { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'ak47', only: BOT_GUNS },
+      { key: 'botGun2', label: 'BOT SECOND WEAPON', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true, only: BOT_GUNS },
       { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
         preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },

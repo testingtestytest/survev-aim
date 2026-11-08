@@ -3,6 +3,7 @@
 // and can dodge bullets it has had time to react to. How well it does all this is its skill.
 (function () {
   const { rand } = SV.util;
+  const C = SV.CONFIG;
   const DIRS = [...Array(8)].map((_, k) => ({ x: Math.cos((k * Math.PI) / 4), y: Math.sin((k * Math.PI) / 4) }));
   const RUSH_GAP = { never: null, sometimes: [8, 14], often: [4, 7] };
 
@@ -12,11 +13,18 @@
   //  Aim        shotErr: per-shot spread in degrees (std dev), react: s to adapt to your direction changes,
   //             leadErr: how far its lead wanders from perfect, track: crosshair follow rate
   //  Dodging    dodge: chance it tries to dodge a shot it has seen
+  //  Switching  qs: chance it quickswitches after a single shot, qsDelay: seconds before it does (also how
+  //             fast it changes guns on an empty mag), qsCare: only switches when that's faster than waiting,
+  //             reloadBoth: reloads both guns before fighting again
+  //  Close up   closeMelee: chance it goes to melee when you're super close, charge: chances per second
+  //             it charges you with melee when you're close, gunSense: chance it acts on the right gun for
+  //             the range (shotgun close, the other gun far)
+  //  Reloading  reloadTo: share of a shell-by-shell gun's mag it loads before firing again
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15 },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4 },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7 },
-    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95 },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34 },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45 },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55 },
+    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67 },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -24,6 +32,27 @@
   const BURST_HOLD = [0.25, 0.5];     // how long a short burst holds the trigger
   const BURST_PAUSE = [0.3, 0.7];     // pause after a short burst
   const DODGE_MARGIN = 0.5;           // units of clearance beyond the hitbox that still count as a threat
+  const SHAKE_MIN_COOLDOWN = 0.6;     // s left on the gun before pulling out melee to lose the slowdown is worth it
+  const CARE_SLACK = 0.2;             // s a careful bot will give up to alternate guns instead of refiring
+  const ERR_CHANGE = [0.15, 0.35];    // s between changes of where its hand error is heading
+  const ERR_SMOOTH = 10;              // how quickly its aim follows that change, per second
+  // Melee, in units from you. Fists reach about 3.25.
+  const MELEE_CLOSE = 3.5;            // "super close": it may go to melee
+  const MELEE_GIVE_UP = 5.5;          // you got away from a close-up fight
+  const MELEE_REROLL = 6;             // beyond this it rolls again as soon as you're super close
+  const MELEE_FIGHT = [1.5, 3];       // s a close-up fight lasts
+  const MELEE_RETRY = 1.5;            // s before it decides again if you stay super close
+  const MELEE_BAND = [1.4, 2.6];      // the distance it keeps while fighting with melee
+  const CHARGE_DIST = 10;             // you're close enough to charge
+  const CHARGE_TIME = [1.2, 2.2];     // s before it gives up a charge
+  const CHARGE_LOW_HP = 4;            // extra charge rate at 0 health, fading to none at full health
+  const RELOAD_INTERRUPT = 6;         // closer than this it fires whatever it has loaded, mid-reload or not
+  // Which gun suits the range.
+  const SHOTGUN_NEAR = 10;            // closer than this it wants the shotgun
+  const SHOTGUN_FAR = 14;             // further than this it wants the other gun
+  const SENSE_EVERY = [0.3, 0.6];     // s between checks that it's holding the right one
+  const SENSE_AFTER_QS = [1.2, 1.6];  // s after a quickswitch before that check, so the shot gets fired
+  const PREFER_STAY = 0.85;           // how much less it quickswitches away from the gun that suits the range
 
   // Dynamic distance: the bot picks any distance in this range, holds loosely around it while it
   // slowly drifts, then picks another. Nothing repeats, so it doesn't settle into set radiuses.
@@ -75,12 +104,23 @@
       this.shotDecisions = new Map();     // shotId -> will it try to dodge this shot?
       this.dodges = 0;                    // stats, also used by the tests
       this.lastDodgeAge = null;
+      this.errNow = 0;                    // where its hand is off by right now, in radians
+      this.errGoal = 0;
+      this.errT = 0;
+      this.closeFightT = 0;               // time left in a close-up melee fight
+      this.closeNext = 0;                 // time before it decides about one again
+      this.charge = false;                // on a melee charge
+      this.meleeIn = 0;                   // reaction time before pulling out melee
+      this.heldForFight = false;
+      this.senseT = 0;
+      this.charges = 0;                   // stats, used by the tests
     }
 
     nextRush() { const g = RUSH_GAP[this.o.rush]; return g ? rand(g[0], g[1]) : Infinity; }
 
     // The distances it's happy at right now, as [closest, furthest].
     range() {
+      if (this.p.cur === 2 && this.fightMelee()) return MELEE_BAND;
       if (this.mode === 'hold' && this.dynamic) return [this.goal - this.slack, this.goal + this.slack];
       const D = this.mode === 'hold' ? this.o.distance : 2.6;
       return [D * 0.75 - 0.5, D * 1.25 + 1];
@@ -102,7 +142,7 @@
 
     // A rush or brawl is over: it gets back out, so you aren't the only one giving ground.
     endFight() {
-      this.mode = 'hold'; this.rushIn = this.nextRush(); this.dirT = 0;
+      this.mode = 'hold'; this.rushIn = this.nextRush(); this.dirT = 0; this.charge = false;
       if (this.dynamic) this.setGoal(rand(DYN.afterFight[0], DYN.afterFight[1]));
     }
 
@@ -133,7 +173,7 @@
       // A rush or a dynamic range change heads fairly straight for where it's going.
       const moveTol = this.mode === 'rush' || (this.dynamic && this.mode === 'hold') ? 0.5 : 0.75;
       let want, tol = moveTol;               // desired radial component (+ away, - toward)
-      if (this.mode === 'rush') want = -0.9;
+      if (this.mode === 'rush' || (this.p.cur === 2 && this.fightMelee() && d > hi)) want = -0.9;
       else if (d > hi) want = -0.7;
       else if (d < lo) want = 0.7;
       else { want = 0; tol = this.S.tol; }   // in range: strafe across the line of fire
@@ -152,8 +192,139 @@
       } else this.dirIdx = Math.floor(Math.random() * 8);
     }
 
+    fightMelee() { return this.charge || this.closeFightT > 0; }
+
+    // Shots a gun needs before the bot stops reloading it. A shell-by-shell gun would otherwise fire
+    // the first shell in, which cancels the reload and leaves it on an almost empty gun.
+    enoughAmmo(d) { return d.maxReload >= d.maxClip ? d.maxClip : Math.ceil(d.maxClip * this.S.reloadTo); }
+
+    // Decides on melee: when you're super close, and sometimes a charge when you're close, more
+    // often the lower its health. A bot set to never rush doesn't charge.
+    meleeThinking(dist, dt) {
+      const p = this.p, S = this.S;
+      if (!p.slots[2].type) return;
+      this.closeFightT -= dt;
+      this.closeNext -= dt;
+      if (dist > MELEE_GIVE_UP) this.closeFightT = 0;
+      if (dist > MELEE_REROLL) this.closeNext = 0;
+      if (dist < MELEE_CLOSE && this.closeNext <= 0 && !this.charge) {
+        const go = Math.random() < S.closeMelee;
+        this.closeFightT = go ? rand(MELEE_FIGHT[0], MELEE_FIGHT[1]) : 0;
+        this.closeNext = this.closeFightT + MELEE_RETRY;
+        if (go) this.meleeIn = rand(S.qsDelay[0], S.qsDelay[1]);
+      }
+      if (this.mode === 'hold' && this.o.rush !== 'never' && dist >= MELEE_CLOSE && dist < CHARGE_DIST) {
+        const hurt = 1 - Math.max(0, p.health) / C.player.health;
+        if (Math.random() < S.charge * (1 + CHARGE_LOW_HP * hurt) * dt) {
+          this.charge = true; this.charges++;
+          this.mode = 'rush'; this.dirT = 0;
+          this.modeT = rand(CHARGE_TIME[0], CHARGE_TIME[1]);
+          this.meleeIn = rand(S.qsDelay[0], S.qsDelay[1]);
+        }
+      }
+    }
+
+    // The slot that suits this range, when it has a shotgun and a gun that isn't. Otherwise null.
+    preferredSlot(dist) {
+      const a = SV.defOf(this.p.slots[0].type), b = SV.defOf(this.p.slots[1].type);
+      if (!a || !b || (a.cls === 'SHOTGUN') === (b.cls === 'SHOTGUN')) return null;
+      const shotgun = a.cls === 'SHOTGUN' ? 0 : 1;
+      return dist < SHOTGUN_NEAR ? shotgun : dist > SHOTGUN_FAR ? 1 - shotgun : null;
+    }
+
+    gunAfterMelee(dist) {
+      const p = this.p, k = this.preferredSlot(dist);
+      return k != null && p.slots[k].ammo > 0 && Math.random() < this.S.gunSense ? k : p.lastGun;
+    }
+
+    // Melee, then two guns: change guns on an empty mag instead of reloading, alternate them with
+    // quickswitches after single shots, and hold the one that suits the range.
+    gunSwitching(dt, dist) {
+      const p = this.p, S = this.S, other = p.cur === 0 ? 1 : 0;
+      if (p.cur === 2) {
+        if (this.fightMelee()) { this.heldForFight = true; return; }
+        // After a fight it goes straight back. If it only pulled melee out to run at full speed, it goes
+        // back just in time for the gun's next shot, so that doesn't change how often it fires.
+        const g = p.slots[p.lastGun];
+        if (this.heldForFight) { this.heldForFight = false; p.switchTo(this.gunAfterMelee(dist)); }
+        else if (g.type && g.cooldown <= C.player.baseSwitchDelay && p.freeSwitchTimer < 0) p.switchTo(p.lastGun);
+        return;
+      }
+      if (this.fightMelee()) {
+        if ((this.meleeIn -= dt) <= 0 && p.switchTo(2)) { this.spraying = false; this.qsT = null; }
+        return;
+      }
+      const w = p.slots[p.cur], o = p.slots[other], d = p.activeDef;
+      const fired = this.ammoSlot === p.cur && w.ammo < this.ammoSeen && d.fireMode === 'single';
+      this.ammoSlot = p.cur; this.ammoSeen = w.ammo;
+      // One gun: any switch clears the post-shot slowdown, so better players pull out melee between shots.
+      if (!o.type) {
+        if (fired && w.ammo > 0 && Math.random() < S.qs) this.qsT = rand(S.qsDelay[0], S.qsDelay[1]);
+        if (this.qsT != null && (this.qsT -= dt) <= 0) {
+          this.qsT = null;
+          if (w.cooldown > SHAKE_MIN_COOLDOWN && p.slots[2].type) p.switchTo(2);
+        }
+        return;
+      }
+      if (fired && o.ammo > 0) {
+        const stay = this.preferredSlot(dist) === p.cur ? 1 - S.gunSense * PREFER_STAY : 1;
+        if (Math.random() < S.qs * stay) this.qsT = rand(S.qsDelay[0], S.qsDelay[1]);
+      }
+      if (w.ammo >= this.enoughAmmo(d) && this.reloadSlot === p.cur) { this.reloadSlot = null; this.topUp = true; }
+      if (o.ammo > 0) this.topUp = false;
+      // Empty: change to the other gun rather than reload this one. If both are empty, change once and
+      // reload that one, so the bot keeps using both guns instead of settling on the last one it fired.
+      if (w.ammo === 0 && this.reloadSlot !== p.cur && !p.action) {
+        // At long range, a bot with sense reloads its long-range gun instead of falling back on the shotgun.
+        if (this.swapT == null && d.cls !== 'SHOTGUN' && this.preferredSlot(dist) === p.cur && Math.random() < S.gunSense) {
+          this.reloadSlot = p.cur;
+          return;
+        }
+        p.scheduledReload = false;
+        if (this.swapT == null) this.swapT = rand(S.qsDelay[0], S.qsDelay[1]);
+        if ((this.swapT -= dt) <= 0) {
+          if (o.ammo === 0) this.reloadSlot = other;
+          this.swapT = this.qsT = null; this.spraying = false;
+          p.switchTo(other);
+        }
+        return;
+      }
+      this.swapT = null;
+      // Better players follow one reload with the other gun's, or they lose the quickswitch.
+      if (S.reloadBoth && this.topUp && w.ammo >= this.enoughAmmo(d) && o.ammo === 0) {
+        this.topUp = false; this.reloadSlot = other; this.qsT = null; this.spraying = false;
+        p.switchTo(other);
+        return;
+      }
+      const cost = p.freeSwitchTimer < 0 ? C.player.baseSwitchDelay : SV.defOf(o.type).switchDelay;
+      if (this.qsT != null && (this.qsT -= dt) <= 0) {
+        if (o.ammo <= 0 || p.bursts.length) { this.qsT = null; return; }
+        // A careful bot waits for the free switch if it isn't worth paying full price yet.
+        if (!S.qsCare || cost < w.cooldown + CARE_SLACK) {
+          this.qsT = null; this.spraying = false;
+          this.senseT = rand(SENSE_AFTER_QS[0], SENSE_AFTER_QS[1]);
+          p.switchTo(other);
+          return;
+        }
+        if (w.cooldown <= 0) this.qsT = null;
+      }
+      if ((this.senseT -= dt) <= 0) {
+        this.senseT = rand(SENSE_EVERY[0], SENSE_EVERY[1]);
+        if (this.preferredSlot(dist) === other && o.ammo > 0 && !p.action && !p.bursts.length && this.reloadSlot == null
+            && (!S.qsCare || cost <= Math.max(w.cooldown, C.player.baseSwitchDelay)) && Math.random() < S.gunSense) {
+          this.qsT = null; this.spraying = false;
+          p.switchTo(other);
+        }
+      }
+    }
+
     // Long runs can overshoot a narrow band or the screen edge, so a dynamic bot turns early.
     offCourse(dist) {
+      // In a melee fight, turn back as soon as it's moving out of reach.
+      if (this.p.cur === 2 && this.fightMelee() && this.dirIdx >= 0 && dist > MELEE_BAND[1]) {
+        const m = DIRS[this.dirIdx];
+        return (m.x * (this.p.pos.x - this.t.pos.x) + m.y * (this.p.pos.y - this.t.pos.y)) / dist > -0.3;
+      }
       if (!this.dynamic || this.mode !== 'hold' || this.dirIdx < 0 || this.dodgeT > 0) return false;
       const v = DIRS[this.dirIdx], [lo, hi] = this.range();
       const r = (v.x * (this.p.pos.x - this.t.pos.x) + v.y * (this.p.pos.y - this.t.pos.y)) / (dist || 1);
@@ -240,10 +411,14 @@
           this.pickDir();
           const m = this.runStyle === 'wide' ? WIDE_MULT : 1;
           this.dirT = this.mode === 'rush' ? rand(0.2, 0.4) : rand(S.run[0] * m, S.run[1] * m);
+          // Runs are set by distance: the post-shot slowdown halves speed, so they last longer while it's on.
+          this.dirT += Math.min(this.dirT, p.shotSlowdownTimer / 2);
         }
       }
       const v = this.dirIdx >= 0 ? DIRS[this.dirIdx] : { x: 0, y: 0 };
       i.right = v.x > 0.3; i.left = v.x < -0.3; i.down = v.y > 0.3; i.up = v.y < -0.3;
+
+      if (this.o.fire) { this.meleeThinking(dist, dt); this.gunSwitching(dt, dist); }
 
       // ---- aim: predict where you'll be when the bullet arrives ----
       // your actual velocity this tick; the bot only adapts to it after its reaction time
@@ -269,7 +444,12 @@
       while (diff > Math.PI) diff -= 2 * Math.PI;
       while (diff < -Math.PI) diff += 2 * Math.PI;
       this.aimAng += diff * Math.min(1, S.track * dt);
-      p.dir = { x: Math.cos(this.aimAng), y: Math.sin(this.aimAng) };
+      // Its hand error drifts instead of being picked afresh every shot, so its aim doesn't shake.
+      if (this.o.fire) {
+        if ((this.errT -= dt) <= 0) { this.errGoal = (gauss() * S.shotErr * Math.PI) / 180; this.errT = rand(ERR_CHANGE[0], ERR_CHANGE[1]); }
+        this.errNow += (this.errGoal - this.errNow) * Math.min(1, ERR_SMOOTH * dt);
+      }
+      p.dir = { x: Math.cos(this.aimAng + this.errNow), y: Math.sin(this.aimAng + this.errNow) };
 
       // ---- shooting ----
       i.shootHold = false;
@@ -277,7 +457,9 @@
         const inRange = d.kind === 'gun' ? dist < d.bullet.distance * 0.9 : dist < 3;
         const onTarget = Math.abs(diff) < Math.max(0.05, Math.atan2(t.rad * 1.5, dist));
         const isAuto = d.kind === 'gun' && (d.fireMode === 'auto' || d.fireMode === 'burst');
-        const hasAmmo = d.kind !== 'gun' || p.slots[p.cur].ammo > 0;
+        const ammo = p.slots[p.cur].ammo;
+        const midReload = d.kind === 'gun' && (p.action || p.reloadAgain || this.reloadSlot === p.cur) && ammo < this.enoughAmmo(d) && dist >= RELOAD_INTERRUPT;
+        const hasAmmo = d.kind !== 'gun' || (ammo > 0 && !midReload);
         // Automatic guns are mostly mag dumped: once it starts, it keeps the trigger held until the
         // mag is empty, you're out of range or its aim is way off. Sometimes it's just a short burst.
         if (this.spraying) {
@@ -285,18 +467,16 @@
           else if ((this.sprayLeft -= dt) <= 0) { this.spraying = false; this.fireT = rand(BURST_PAUSE[0], BURST_PAUSE[1]); }
         }
         if (this.spraying || (inRange && onTarget && (this.fireT -= dt) <= 0)) {
-          // small per-shot hand error
-          const err = (gauss() * S.shotErr * Math.PI) / 180;
-          p.dir = { x: Math.cos(this.aimAng + err), y: Math.sin(this.aimAng + err) };
           if (isAuto) {
             if (!this.spraying && hasAmmo) {
               this.spraying = true;
               this.sprayLeft = Math.random() < BURST_CHANCE ? rand(BURST_HOLD[0], BURST_HOLD[1]) : Infinity;
             }
-            i.shootHold = true;
-          } else if (p.slots[p.cur].cooldown < 0) { i.shootStart = true; this.fireT = rand(0.05, 0.25); }
+            if (hasAmmo) i.shootHold = true;
+          } else if (hasAmmo && p.slots[p.cur].cooldown < 0) { i.shootStart = true; this.fireT = rand(0.05, 0.25); }
         }
-        if (d.kind === 'gun' && p.slots[p.cur].ammo === 0) p.tryReload();
+        const twoGuns = p.cur < 2 && p.slots[1 - p.cur].type;
+        if (d.kind === 'gun' && ((ammo === 0 && !twoGuns) || (this.reloadSlot === p.cur && ammo < this.enoughAmmo(d)))) p.tryReload();
       }
     }
   }

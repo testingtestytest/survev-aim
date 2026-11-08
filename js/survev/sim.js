@@ -17,6 +17,11 @@
 
   Object.values(SV.GUNS).forEach((g) => (g.kind = 'gun'));
   Object.values(SV.MELEE).forEach((m) => (m.kind = 'melee'));
+  // client/src/objects/particles.ts bloodSplat
+  SV.BLOOD = {
+    life: 0.5, drag: 1, images: ['part-splat-01', 'part-splat-02', 'part-splat-03'],
+    scaleStart: 0.04, scaleEnd: [0.15, 0.2], fadeFrom: [0.75, 1], value: [0.45, 0.8], bulletRot: 1, meleeSpread: Math.PI / 3,
+  };
   SV.defOf = (type) => SV.GUNS[type] || SV.MELEE[type] || null;
   const recoilTimeOf = (d) => (d.recoilTime == null ? 1e10 : d.recoilTime);
 
@@ -88,6 +93,17 @@
 
     get active() { return this.slots[this.cur].type; }
     get activeDef() { return SV.defOf(this.active); }
+
+    // The pan is "worn" on the back whenever it's the melee weapon and another slot is held (weaponManager.ts).
+    get wearingPan() { return this.slots[2].type === 'pan' && this.active !== 'pan'; }
+    // player.ts hasActivePan: it blocks on your back, or in your hand except during a swing.
+    hasActivePan() { return this.wearingPan || (this.active === 'pan' && this.meleeAnim <= 0); }
+    // player.ts getPanSegment + math.transformSegment. survev's y is up, so local y flips here.
+    panSegmentAt(pos, dir) {
+      const s = SV.MELEE.pan.reflectSurface[this.wearingPan ? 'unequipped' : 'equipped'];
+      const at = (q) => ({ x: pos.x + dir.x * q.x + dir.y * q.y, y: pos.y + dir.y * q.x - dir.x * q.y });
+      return { p0: at(s.p0), p1: at(s.p1) };
+    }
 
     // weaponManager.setWeapon
     setWeapon(idx, type) {
@@ -232,6 +248,8 @@
 
     update(dt) {
       if (this.dead) return;
+      this.dirOld = this.dirNow || this.dir;   // the pan tests both where it was and where it is
+      this.dirNow = this.dir;
       // player.update boost logic: heal by tier, then decay
       if (this.boost > 0) {
         this.health = Math.min(C.player.health, this.health + SV.boostHeal(this.boost) * dt);
@@ -390,6 +408,9 @@
         if (Math.hypot(p.pos.x - col.x, p.pos.y - col.y) < col.rad + p.rad) {
           const res = p.damage(d.damage, d);
           if (res && this.events.hit) this.events.hit(this, p, res, d);
+          // player.ts: melee blood stays at the target's position and drifts along the swing
+          const dd = Math.hypot(p.pos.x - this.pos.x, p.pos.y - this.pos.y) || 1;
+          this.world.blood.push({ x: p.pos.x, y: p.pos.y, dir: { x: (p.pos.x - this.pos.x) / dd, y: (p.pos.y - this.pos.y) / dd }, born: this.world.time });
         }
       }
     }
@@ -399,43 +420,75 @@
     constructor() {
       this.players = [];
       this.bullets = [];
+      this.blood = [];
       this.time = 0;
     }
     addPlayer(x, y, opts) { const p = new Player(this, x, y, opts); this.players.push(p); return p; }
 
     // bulletBarn.fireBullet + Bullet constructor (no perks, no variance on gun bullets)
-    fireBullet(owner, gunDef, pos, dir, shotFx, shotId) {
+    fireBullet(owner, gunDef, pos, dir, shotFx, shotId, reflectCount = 0) {
       const b = gunDef.bullet;
       const variance = 1 + b.variance;     // varianceT defaults to 1; gun bullets have variance 0
       const distAdjIdx = b.noDistAdj ? 8 : randInt(0, 16);
       const distAdj = remap(distAdjIdx, 0, 16, -1, 1);
-      const distance = clamp(b.distance * variance + distAdj, 0, 1e6);
+      const base = b.distance / Math.pow(C.bulletReflectDistDecay, reflectCount);
+      const distance = clamp(base * variance + distAdj, 0, 1e6);
       this.bullets.push({
         owner, gunDef, pos: { ...pos }, start: { ...pos }, dir: { ...dir },
         speed: b.speed * variance, distance, traveled: 0, damage: b.damage, falloff: b.falloff, alive: true, shotFx,
-        collided: false, scale: 1, shotId, born: this.time,
+        collided: false, scale: 1, shotId, born: this.time, reflectCount,
       });
+    }
+
+    // bullet.ts checkForCollisions, pan part: distance along this move to the pan, and the surface's normal.
+    panHit(b, nx, ny, step, p) {
+      const oldSeg = p.panSegmentAt(p.posOld, p.dirOld || p.dir), newSeg = p.panSegmentAt(p.pos, p.dir);
+      const onOld = segSeg(b.pos.x, b.pos.y, nx, ny, oldSeg.p0, oldSeg.p1);
+      const onNew = segSeg(b.pos.x, b.pos.y, nx, ny, newSeg.p0, newSeg.p1);
+      const t = onNew != null ? onNew : onOld;
+      if (t == null) return null;
+      const seg = onOld != null ? newSeg : oldSeg;     // the server's pairing, kept as it is there
+      const ex = seg.p1.x - seg.p0.x, ey = seg.p1.y - seg.p0.y, l = Math.hypot(ex, ey) || 1;
+      return { dist: t * step - 0.2, normal: { x: -ey / l, y: ex / l } };   // stops 0.2 units short of the surface
     }
 
     update(dt) {
       this.time += dt;
       for (const p of this.players) p.update(dt);
+      while (this.blood.length && this.time - this.blood[0].born > SV.BLOOD.life) this.blood.shift();
+      const bounced = [];
       for (const b of this.bullets) {
         if (!b.alive) { if (b.collided) b.scale = Math.max(b.scale - dt * 6, 0); continue; }
         const step = Math.min(b.distance - b.traveled, b.speed * dt);
         const nx = b.pos.x + b.dir.x * step, ny = b.pos.y + b.dir.y * step;
-        // segment vs circle, nearest hit
-        let hit = null, hitT = Infinity;
+        // segment vs circle and pan, nearest hit. A reflected bullet can hit whoever fired it (damageSelf).
+        let hit = null, hitT = Infinity, pan = null, panD = Infinity, panBy = null;
         for (const p of this.players) {
-          if (p === b.owner || p.dead) continue;
+          if ((p === b.owner && !b.reflectCount) || p.dead) continue;
           const t = segCircle(b.pos.x, b.pos.y, nx, ny, p.pos.x, p.pos.y, p.rad);
-          if (t != null && t < hitT) { hitT = t; hit = p; }
+          const ph = p.hasActivePan() ? this.panHit(b, nx, ny, step, p) : null;
+          if (t != null && (!ph || t * step < ph.dist)) { if (t < hitT) { hitT = t; hit = p; } }
+          else if (ph && ph.dist < panD) { panD = ph.dist; pan = ph; panBy = p; }
+        }
+        if (pan && (!hit || panD < hitT * step)) {
+          b.traveled += step;
+          b.pos.x += b.dir.x * panD; b.pos.y += b.dir.y * panD;
+          b.alive = false;
+          b.collided = true;
+          if (b.reflectCount < C.bulletMaxReflect) {   // bullet.reflect
+            const dot = b.dir.x * pan.normal.x + b.dir.y * pan.normal.y;
+            bounced.push({ b, pos: { ...b.pos }, dir: { x: b.dir.x - 2 * dot * pan.normal.x, y: b.dir.y - 2 * dot * pan.normal.y } });
+          }
+          if (panBy.events.reflect) panBy.events.reflect(panBy, b);
+          continue;
         }
         if (hit) {
           b.traveled += step;          // bullet.update adds the whole move before checking collisions
           b.pos.x += b.dir.x * step * hitT; b.pos.y += b.dir.y * step * hitT;
-          let dmg = b.damage;
+          let dmg = b.damage / (b.reflectCount + 1);   // bullet.ts: each bounce divides the damage
           if (C.bulletFalloff) dmg *= remap(clamp(b.traveled / b.distance, 0, 1), 0, 1, 1, b.falloff);
+          // bullet.ts: bullet blood is attached to the player who was hit, at the point of impact
+          this.blood.push({ on: hit, x: b.pos.x - hit.pos.x, y: b.pos.y - hit.pos.y, born: this.time });
           const res = hit.damage(dmg, b.gunDef);
           if (res && b.owner.events.hit) b.owner.events.hit(b.owner, hit, res, b.gunDef, b.shotId);
           b.alive = false;
@@ -447,7 +500,18 @@
         if (b.traveled >= b.distance - 1e-6) b.alive = false;   // client: hidden at max range
       }
       this.bullets = this.bullets.filter((b) => b.alive || (b.collided && b.scale > 0));
+      for (const r of bounced) this.fireBullet(r.b.owner, r.b.gunDef, r.pos, r.dir, false, r.b.shotId, r.b.reflectCount + 1);
     }
+  }
+
+  // Returns t in [0,1] along segment AB where it crosses segment p0-p1, or null (coldet.intersectSegmentSegment).
+  function segSeg(ax, ay, bx, by, p0, p1) {
+    const rx = bx - ax, ry = by - ay, sx = p1.x - p0.x, sy = p1.y - p0.y;
+    const denom = rx * sy - ry * sx;
+    if (Math.abs(denom) < 1e-12) return null;
+    const qx = p0.x - ax, qy = p0.y - ay;
+    const t = (qx * sy - qy * sx) / denom, u = (qx * ry - qy * rx) / denom;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null;
   }
 
   // Returns t in [0,1] of first intersection of segment AB with circle (C, r), or null.

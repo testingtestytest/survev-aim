@@ -267,7 +267,7 @@ body.touch.in-game #touch-exit {
   z-index: 3;
 }
 body.touch #hud { padding-right: 60px; }
-body.touch #binds-btn, body.touch #xh-btn, body.touch .keys { display: none; }
+body.touch #xh-btn, body.touch .keys, body.touch #binds-intro, body.touch #binds-list, body.touch #binds-reset { display: none; }
 body.touch .screen { padding: 24px 16px 64px; }
 body.touch .cards { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); margin-top: 32px; }
 body.touch .card { min-height: 0; padding: 20px; }

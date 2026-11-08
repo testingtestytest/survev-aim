@@ -252,6 +252,18 @@
     show('binds');
   }
   function renderBinds() {
+    const prefs = $('#prefs-list');
+    prefs.innerHTML = '';
+    const blood = el('div', 'row');
+    blood.appendChild(el('div', 'label', 'BLOOD IMPACTS'));
+    const bloodOpts = el('div', 'opts');
+    [['on', 'ON'], ['off', 'OFF']].forEach(([v, text]) => {
+      const b = el('button', 'opt' + (AT.prefs.blood === v ? ' sel' : ''), text);
+      b.onclick = () => { AT.setPref('blood', v); renderBinds(); };
+      bloodOpts.appendChild(b);
+    });
+    blood.appendChild(bloodOpts);
+    prefs.appendChild(blood);
     const box = $('#binds-list');
     box.innerHTML = '';
     AT.BIND_ACTIONS.forEach((a) => {
@@ -576,6 +588,8 @@
   document.querySelectorAll('.tab[data-view]').forEach((b) => {
     b.onclick = () => { store.set('setview', b.dataset.view); renderSettings(); };
   });
+  // Phones have no keys to bind, so that screen only holds settings there.
+  if (AT.touch) { $('#binds-btn').textContent = 'SETTINGS'; $('#binds-title').textContent = 'SETTINGS'; }
   $('#binds-btn').onclick = openBinds;
   $('#binds-back').onclick = goMenu;
   $('#binds-reset').onclick = () => { AT.resetBinds(); capturing = null; renderBinds(); };
