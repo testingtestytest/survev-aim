@@ -236,6 +236,8 @@
   }
 
   // ---------- settings ----------
+  // The same settings with some defaults changed, for a mode that starts differently.
+  const startingAt = (settings, defaults) => settings.map((s) => (s.key in defaults ? { ...s, default: defaults[s.key] } : s));
   const loadout = () => [
     { key: 'primary', label: 'PRIMARY', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true },
     { key: 'secondary', label: 'SECONDARY', type: 'weapon', pick: 'gun', default: 'spas12', allowNone: true },
@@ -492,6 +494,39 @@
   ];
 
   AT.register({
+    id: 'sv-1v1',
+    group: 'survev',
+    name: '1V1',
+    description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee, and it fights back.',
+    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'obstacles', 'scope', 'duration'],
+    settings: [
+      ...loadout(),
+      botRange,
+      { key: 'rush', label: 'RUSHES', default: 'sometimes', preview: pvBot,
+        options: [{ v: 'never', label: 'NEVER' }, { v: 'sometimes', label: 'SOMETIMES' }, { v: 'often', label: 'OFTEN' }] },
+      { key: 'botMove', label: 'BOT MOVEMENT', default: 'strafe', preview: pvBot,
+        options: [{ v: 'strafe', label: 'STRAFE' }, { v: 'wide', label: 'WIDE' }, { v: 'mixed', label: 'MIXED' }] },
+      ...skillSettings('on'),
+      ...startingAt(botArmor(), { botHelmet: 2, botVest: 2 }),
+      ...startingAt(myArmor(), { myHelmet: 2, myVest: 2 }),
+      ...startingAt(adrenaline(), { myBoost: 40, botBoost: 40 }),
+      { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'ak47', only: BOT_GUNS },
+      { key: 'botGun2', label: 'BOT SECOND WEAPON', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true, only: BOT_GUNS },
+      { key: 'botMelee', label: 'BOT MELEE', type: 'weapon', pick: 'melee', default: 'pan' },
+      { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
+        preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
+        options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
+      ...touchSettings(),
+      { ...obstaclesSetting, default: 'normal' },
+      { ...scope, default: '4xscope' },
+      popups,
+      { key: 'duration', label: 'DURATION', default: 120, preview: AT.pv.duration,
+        options: [60, 120, 180].map((v) => ({ v, label: v + 'S' })) },
+    ],
+    create: (cfg, api) => createGame(cfg, api, '1v1'),
+  });
+
+  AT.register({
     id: 'sv-range',
     group: 'survev',
     name: 'QUICKSWITCH',
@@ -513,38 +548,5 @@
         options: [30, 60, 120].map((v) => ({ v, label: v + 'S' })) },
     ],
     create: (cfg, api) => createGame(cfg, api, 'range'),
-  });
-
-  AT.register({
-    id: 'sv-1v1',
-    group: 'survev',
-    name: '1V1',
-    description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee, and it fights back.',
-    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'obstacles', 'scope', 'duration'],
-    settings: [
-      ...loadout(),
-      botRange,
-      { key: 'rush', label: 'RUSHES', default: 'sometimes', preview: pvBot,
-        options: [{ v: 'never', label: 'NEVER' }, { v: 'sometimes', label: 'SOMETIMES' }, { v: 'often', label: 'OFTEN' }] },
-      { key: 'botMove', label: 'BOT MOVEMENT', default: 'strafe', preview: pvBot,
-        options: [{ v: 'strafe', label: 'STRAFE' }, { v: 'wide', label: 'WIDE' }, { v: 'mixed', label: 'MIXED' }] },
-      ...skillSettings('on'),
-      ...botArmor(),
-      ...myArmor(),
-      ...adrenaline(),
-      { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'ak47', only: BOT_GUNS },
-      { key: 'botGun2', label: 'BOT SECOND WEAPON', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true, only: BOT_GUNS },
-      { key: 'botMelee', label: 'BOT MELEE', type: 'weapon', pick: 'melee', default: 'pan' },
-      { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
-        preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
-        options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
-      ...touchSettings(),
-      obstaclesSetting,
-      scope,
-      popups,
-      { key: 'duration', label: 'DURATION', default: 120, preview: AT.pv.duration,
-        options: [60, 120, 180].map((v) => ({ v, label: v + 'S' })) },
-    ],
-    create: (cfg, api) => createGame(cfg, api, '1v1'),
   });
 })();
