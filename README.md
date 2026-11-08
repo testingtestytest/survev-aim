@@ -37,7 +37,7 @@ The bot can also fight with **melee**, fists by default, and you can choose its 
 
 With one gun, a bot on a slow single-shot gun such as a sniper can pull out melee between shots. Any switch clears the post-shot slowdown, so it strafes at full speed and still fires as often. Skill sets how often it does this.
 
-**Bot skill** (both modes) sets how well it strafes, aims and how often it tries to dodge. **Bot dodges bullets** turns dodging on or off, and **dodge reaction time** sets how long a bullet must be in the air before the bot notices it. Bullet flight is short, so at a given range fast guns can arrive before it reacts at all. The bot's movement, aim and dodging are this trainer's own design, not code from the game.
+**Bot skill** (both modes, Pro by default) sets how well it strafes, aims and how often it tries to dodge. **Bot dodges bullets** turns dodging on or off, and **dodge reaction time** sets how long a bullet must be in the air before the bot notices it. Bullet flight is short, so at a given range fast guns can arrive before it reacts at all. The bot's movement, aim and dodging are this trainer's own design, not code from the game.
 
 In both modes you can choose your loadout (primary, secondary, melee; Mosin, SPAS-12 and frying pan by default), the bot's armor level (the preview shows the damage your loadout does to it), scope, and whether damage numbers are shown.
 

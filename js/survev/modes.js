@@ -123,7 +123,7 @@
     });
   }
   const skillSettings = (dodgeDefault) => [
-    { key: 'skill', label: 'BOT SKILL', default: 'medium', preview: pvSkill,
+    { key: 'skill', label: 'BOT SKILL', default: 'pro', preview: pvSkill,
       options: [{ v: 'low', label: 'LOW' }, { v: 'medium', label: 'MEDIUM' }, { v: 'high', label: 'HIGH' }, { v: 'pro', label: 'PRO' }] },
     { key: 'dodge', label: 'BOT DODGES BULLETS', default: dodgeDefault, preview: pvSkill,
       options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },

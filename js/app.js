@@ -36,7 +36,7 @@
 
   const keys = new Set();          // held KeyboardEvent.codes (for survev movement)
   const openPickers = new Set();   // expanded weapon pickers on the settings screen
-  let menuGroup = store.get('tab', 'standard') === 'survev' ? 'survev' : 'standard';
+  let menuGroup = 'survev';      // the page always opens on the survev modes
   let capturing = null;            // { action, idx } while rebinding a key
 
   const api = {
@@ -608,7 +608,7 @@
   }
 
   document.querySelectorAll('.tab[data-g]').forEach((b) => {
-    b.onclick = () => { menuGroup = b.dataset.g; store.set('tab', menuGroup); renderMenu(); };
+    b.onclick = () => { menuGroup = b.dataset.g; renderMenu(); };
   });
   document.querySelectorAll('.tab[data-view]').forEach((b) => {
     b.onclick = () => { store.set('setview', b.dataset.view); renderSettings(); };
