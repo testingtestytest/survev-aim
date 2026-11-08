@@ -8,7 +8,7 @@
   const SPAWN_PAD = 70, SPAWN_PAD_BOTTOM = 150; // px a respawn stays clear of the screen edge and bottom HUD
   const SPAWN_MIN_DIST = 6;                     // units: never respawns right on top of you
   const SKIN = '#f8c574';
-  const BOT_GUNS = ['m4a1', 'ak47', 'mp5', 'vector', 'm870', 'spas12', 'mosin', 'sv98', 'm249'];
+  const BOT_GUNS = ['m4a1', 'ak47', 'an94', 'famas', 'mp5', 'vector', 'ump9', 'm93r', 'm870', 'spas12', 'mosin', 'sv98', 'm249'];
   // Scope zoom radii from gameConfig. Phones and tablets see further, as in player.ts m_getZoom.
   const RADII = AT.touch ? C.scopeZoomRadiusMobile : C.scopeZoomRadius;
   const SCOPES = Object.keys(RADII);             // 1x 2x 4x 8x 15x
@@ -534,7 +534,7 @@
       ...adrenaline(),
       { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'ak47', only: BOT_GUNS },
       { key: 'botGun2', label: 'BOT SECOND WEAPON', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true, only: BOT_GUNS },
-      { key: 'botMelee', label: 'BOT MELEE', type: 'weapon', pick: 'melee', default: 'fists' },
+      { key: 'botMelee', label: 'BOT MELEE', type: 'weapon', pick: 'melee', default: 'pan' },
       { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
         preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },

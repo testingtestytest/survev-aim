@@ -99,6 +99,13 @@
       }
       return false;
     }
+    // Every live obstacle crossing this line, nearest first.
+    blockers(a, b) {
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      return this.near((a.x + b.x) / 2, (a.y + b.y) / 2, len / 2 + 3)
+        .filter((o) => !o.dead && segCircle(a.x, a.y, b.x, b.y, o.x, o.y, o.r) != null)
+        .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y));
+    }
     // Would moving along dir run into something soon? Moving away from what you're touching doesn't count.
     ahead(pos, dir, look, rad) {
       for (const o of this.near(pos.x, pos.y, look + rad + 3)) {
@@ -112,7 +119,7 @@
     // A* on a 1-unit grid with 8-way moves, the same moves a player's keys make. Cells are off limits within
     // rad + clear of an obstacle, except that right beside the start only real contact counts, so a bot
     // hugging a tree can still leave. If the goal can't be reached it goes to the closest cell it found.
-    findPath(from, to, rad, clear) {
+    findPath(from, to, rad, clear, arrive = PATH_ARRIVE) {
       let gx = to.x, gy = to.y;
       const L = Math.hypot(gx - from.x, gy - from.y);
       if (L > PATH_RANGE) { gx = from.x + ((gx - from.x) / L) * PATH_RANGE; gy = from.y + ((gy - from.y) / L) * PATH_RANGE; }
@@ -158,7 +165,7 @@
         done[c] = 1;
         const here = guess(c);
         if (here < bestH) { bestH = here; best = c; }
-        if (here <= PATH_ARRIVE) break;
+        if (here <= arrive) break;
         const cx = c % w, cy = Math.floor(c / w);
         for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
           if (!dx && !dy) continue;

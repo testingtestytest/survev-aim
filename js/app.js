@@ -254,16 +254,18 @@
   function renderBinds() {
     const prefs = $('#prefs-list');
     prefs.innerHTML = '';
-    const blood = el('div', 'row');
-    blood.appendChild(el('div', 'label', 'BLOOD IMPACTS'));
-    const bloodOpts = el('div', 'opts');
-    [['on', 'ON'], ['off', 'OFF']].forEach(([v, text]) => {
-      const b = el('button', 'opt' + (AT.prefs.blood === v ? ' sel' : ''), text);
-      b.onclick = () => { AT.setPref('blood', v); renderBinds(); };
-      bloodOpts.appendChild(b);
+    [['blood', 'BLOOD IMPACTS'], ['fps', 'FPS COUNTER']].forEach(([key, label]) => {
+      const row = el('div', 'row');
+      row.appendChild(el('div', 'label', label));
+      const opts = el('div', 'opts');
+      [['on', 'ON'], ['off', 'OFF']].forEach(([v, text]) => {
+        const b = el('button', 'opt' + (AT.prefs[key] === v ? ' sel' : ''), text);
+        b.onclick = () => { AT.setPref(key, v); renderBinds(); };
+        opts.appendChild(b);
+      });
+      row.appendChild(opts);
+      prefs.appendChild(row);
     });
-    blood.appendChild(bloodOpts);
-    prefs.appendChild(blood);
     const box = $('#binds-list');
     box.innerHTML = '';
     AT.BIND_ACTIONS.forEach((a) => {
@@ -279,6 +281,27 @@
       row.appendChild(opts);
       box.appendChild(row);
     });
+  }
+
+  // Frames per second, counted over half a second so the number can be read. Survev modes keep it under
+  // the speed box; standard modes and phones have the bottom-left corner free.
+  const fps = { last: 0, frames: 0, time: 0, value: 0 };
+  function countFps(now) {
+    fps.frames++;
+    fps.time += Math.max(0, now - fps.last) / 1000;
+    fps.last = now;
+    if (fps.time >= 0.5) { fps.value = Math.round(fps.frames / fps.time); fps.frames = 0; fps.time = 0; }
+  }
+  function drawFps() {
+    if (!AT.prefs || AT.prefs.fps === 'off' || !fps.value) return;
+    const survev = mode && mode.group === 'survev', w = 74, h = 22, x = 12;
+    const y = survev && !AT.touch ? 46 : H - h - 12;
+    g.fillStyle = survev ? 'rgba(0,0,0,0.24)' : '#ffffff';
+    g.fillRect(x, y, w, h);
+    g.font = '700 14px monospace';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = survev ? '#ffffff' : '#000000';
+    g.fillText(fps.value + ' FPS', x + w / 2, y + h / 2 + 1);
   }
 
   function openSettings(m) {
@@ -464,12 +487,14 @@
       overT -= dt;
     }
 
+    countFps(performance.now());
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = COLORS.bg;
     g.fillRect(0, 0, W, H);
     if (state === 'countdown' || state === 'playing' || state === 'gameover') {
       game.draw(g);
       drawFx(dt);
+      drawFps();
       updateHud();
     } else if (state === 'settings') {
       drawPreviews(dt);

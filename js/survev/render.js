@@ -87,8 +87,24 @@
       x.drawImage(im, 0, 0, c.width, c.height);
     }
     c.srcW = w; c.srcH = h;
+    c.mips = shrinkSteps(c);
     tintCache[key] = c;
     return c;
+  }
+  // The same bitmap at half size, a quarter, and so on, each made from the last. Shrinking a lot in one
+  // step skips pixels and leaves jagged edges, so drawing starts from the copy nearest the on-screen size.
+  function shrinkSteps(c) {
+    const out = [c];
+    for (let last = c; last.width > 8 && last.height > 8;) {
+      const n = document.createElement('canvas');
+      n.width = Math.ceil(last.width / 2); n.height = Math.ceil(last.height / 2);
+      const x = n.getContext('2d');
+      x.imageSmoothingQuality = 'high';
+      x.drawImage(last, 0, 0, n.width, n.height);
+      out.push(n);
+      last = n;
+    }
+    return out;
   }
   SV.preload = (names) => names.forEach((n) => n && SV.img(n));
   const hex = (n, a = 1) => `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
@@ -98,7 +114,13 @@
     const c = tinted(name, tint);
     if (!c) return;
     const w = c.srcW * sx, h = c.srcH * sy;
-    g.drawImage(c, -w * ax, -h * ay, w, h);
+    // real pixels this will cover, then the smallest copy that's still at least that big
+    const m = g.getTransform();
+    const need = Math.max((Math.abs(w) * Math.hypot(m.a, m.b)) / c.width, (Math.abs(h) * Math.hypot(m.c, m.d)) / c.height);
+    let level = 0;
+    while (level + 1 < c.mips.length && need <= 0.5 ** (level + 1)) level++;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(c.mips[level], -w * ax, -h * ay, w, h);
   }
 
   function drawGun(g, d) {

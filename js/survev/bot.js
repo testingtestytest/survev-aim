@@ -20,15 +20,26 @@
   //             it charges you with melee when you're close, gunSense: chance it acts on the right gun for
   //             the range (shotgun close, the other gun far)
   //  Reloading  reloadTo: share of a shell-by-shell gun's mag it loads before firing again
+  //  Breaking   breakCare: chance it thinks of shooting out the obstacle you're behind, spare: how much of
+  //             your health it wants to be able to deal afterward (0 = doesn't count its bullets)
+  //  Cover      coverCare: chance it goes behind cover to reload, coverReach: units it'll look for it
+  //  Sneaking   sneakCare: chance per check it reloads a part-empty mag when safe, sneakAt: how full a mag
+  //             can still be (share of the clip), sneakQuiet: seconds since your last shot that feel safe,
+  //             sneakReads: it notices when you're reloading
+  //  Peeking    peekCare: chance per check it fights a burst gun from behind cover, peekHide: seconds it stays
+  //             hidden between peeks
+  //  Shielding  shieldCare: chance it shields with its pan when you spray it, showerShots: shots of yours in
+  //             SHOWER_WINDOW that count as being sprayed, shieldHold: seconds it stays shielded between peeks
+  //  Your pan   panRespect: chance it holds fire while your pan faces it, waiting for an opening
   //  Pan        panCare: chance it turns the pan toward you in a gap between shots, panErr: how far off it
   //             lands in degrees (std dev)
   //  Obstacles  replan: seconds between path updates, seekAfter: seconds without seeing you before it goes
   //             looking, losCare: chance it holds fire instead of shooting an obstacle in the way
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25 },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14 },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7 },
-    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3 },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1] },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2] },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4] },
+    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6] },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -59,6 +70,36 @@
   // Turning the pan toward you while it can't shoot.
   const PAN_TURN = 3;                 // turning takes about this many "track" time constants
   const PAN_MIN_GAP = 0.15;           // s it must be able to hold the pan there, on top of turning both ways
+  // Shooting out your cover: it only bothers when you're right behind the one obstacle in the way.
+  const BREAK_NEAR = 4;               // units between you and the obstacle's edge
+  // Reloading somewhere safe.
+  const COVER_MIN_RELOAD = 0.6;       // s of reload left that make going to cover worthwhile
+  const COVER_GAP = 0.25;             // units it stands from the obstacle
+  const COVER_ARRIVED = 0.6;
+  const COVER_MIN_FROM_YOU = 5;       // it won't hide somewhere this close to you
+  const COVER_TRIP = 3;               // s it'll spend walking to cover before reloading a part-empty mag
+  const COVER_TRIP_AT = 0.5;          // goes out of its way for this share of sneakAt
+  const SNEAK_EVERY = [0.35, 0.6];    // s between checks
+  const SNEAK_FAR = 12;               // in the open, it needs you at least this far away
+  const SNEAK_IN_VIEW = 0.6;          // and its mag lower than this share of sneakAt
+  const ATTACK_MARGIN = 0.5;          // units beyond its body that a shot of yours counts as aimed at it
+  const ATTACK_LINGER = 0.4;          // s it still feels under attack after a shot passes or lands
+  // Peeking from cover with a burst gun.
+  const PEEK_EVERY = [0.8, 1.6];      // s between thinking of going to cover
+  const PEEK_STAY = [6, 12];          // s it fights from one obstacle before it may move on
+  const PEEK_BURSTS = [1, 2];         // bursts per peek
+  const PEEK_OUT_MAX = 1.5;           // s it stays out if it can't get its shots off
+  const PEEK_RETRY = 0.5;             // s until it tries again when neither side has a clear shot
+  const PEEK_SIDE = 0.4;              // units past touching the obstacle it steps out
+  // Shielding with its own pan while you spray it.
+  const SHOWER_WINDOW = 0.6;          // s of your shots it remembers
+  const SHOWER_LINGER = 0.8;          // s it stays shielded after the shots stop
+  const SHOWER_NEAR = 1.5;            // units beyond its body that a shot still counts
+  const SHIELD_PEEK_MAX = 0.6;        // s it stays turned toward you if it can't get its shot off
+  // Waiting out a pan that faces it.
+  const PAN_FACE_CONE = 0.6;          // radians either side of the pan that count as facing it
+  const PAN_PROBE_EVERY = [1.5, 3.5]; // s between the occasional shots it still takes
+  const PAN_PROBE_LEN = 0.25;         // s each lasts
   // Finding a way around obstacles.
   const NAV_CLEAR = 0.45;             // units it tries to leave between itself and an obstacle
   const NAV_LOOK = 2.5;               // how far ahead it checks a direction before choosing it
@@ -133,6 +174,34 @@
       this.heldForFight = false;
       this.senseT = 0;
       this.charges = 0;                   // stats, used by the tests
+      this.attacked = false;              // one of your shots is coming at it, or just hit it
+      this.threatAge = 0;
+      this.attackLinger = 0;
+      this.lastHealth = player.health;
+      this.peekT = 0;
+      this.peeks = 0;                     // stats, used by the tests
+      this.recentShots = [];              // { id, at } your shots coming its way
+      this.showerT = 0;
+      this.shield = false;                // shielding with its pan, peeking out for single shots
+      this.shieldRolled = false;
+      this.shieldPeek = false;
+      this.shieldPeekIn = 0;
+      this.shieldPeekT = 0;
+      this.shieldAmmo = 0;
+      this.panWait = false;               // holding fire because your pan faces it
+      this.panFaced = false;
+      this.panRespected = false;
+      this.panProbeT = 0;
+      this.panLag = 0;
+      this.breakWant = false;             // decided to shoot out your cover if it can spare the bullets
+      this.breaking = false;
+      this.cover = null;                  // { o, trip, until } the obstacle it's reloading behind
+      this.wasReloading = false;
+      this.sneak = false;                 // this reload started with bullets still in the mag
+      this.sneakT = 0;
+      this.quietT = 0;                    // how long since you last had a shot in the air
+      this.sneaks = 0;                    // stats, used by the tests
+      this.coverUses = 0;
       this.panCovering = false;
       this.panRolled = false;
       this.panOff = 0;
@@ -256,6 +325,11 @@
     panCover(dist) {
       const p = this.p, S = this.S;
       if (p.slots[2].type !== 'pan') return null;
+      const panAngle = () => {
+        const s = SV.MELEE.pan.reflectSurface[p.wearingPan ? 'unequipped' : 'equipped'];
+        return -Math.atan2(-(s.p0.y + s.p1.y) / 2, (s.p0.x + s.p1.x) / 2) + this.panOff;
+      };
+      if (this.shield) return this.shieldPeek || dist < this.meleeReach() + MELEE_CLOSE ? null : panAngle();
       const turn = PAN_TURN / S.track, wait = this.timeToFire();
       if (wait < turn || dist < this.meleeReach() + MELEE_CLOSE || this.sightBlocked || (p.cur === 2 && this.fightMelee())) {
         this.panCovering = this.panRolled = false;
@@ -266,9 +340,7 @@
         this.panCovering = Math.random() < S.panCare;
         this.panOff = (gauss() * S.panErr * Math.PI) / 180;
       }
-      if (!this.panCovering) return null;
-      const s = SV.MELEE.pan.reflectSurface[p.wearingPan ? 'unequipped' : 'equipped'];
-      return -Math.atan2(-(s.p0.y + s.p1.y) / 2, (s.p0.x + s.p1.x) / 2) + this.panOff;
+      return this.panCovering ? panAngle() : null;
     }
 
     // Shots a gun needs before the bot stops reloading it. A shell-by-shell gun would otherwise fire
@@ -291,7 +363,7 @@
         this.closeNext = this.closeFightT + MELEE_RETRY;
         if (go) this.meleeIn = rand(S.qsDelay[0], S.qsDelay[1]);
       }
-      if (this.mode === 'hold' && this.o.rush !== 'never' && dist >= close && dist < CHARGE_DIST + (reach - FISTS_REACH) * CHARGE_PER_REACH) {
+      if (this.mode === 'hold' && this.o.rush !== 'never' && !(this.cover && !this.cover.peek) && dist >= close && dist < CHARGE_DIST + (reach - FISTS_REACH) * CHARGE_PER_REACH) {
         const hurt = 1 - Math.max(0, p.health) / C.player.health;
         if (Math.random() < S.charge * (1 + CHARGE_LOW_HP * hurt) * dt) {
           this.charge = true; this.charges++;
@@ -353,6 +425,8 @@
       // Empty: change to the other gun rather than reload this one. If both are empty, change once and
       // reload that one, so the bot keeps using both guns instead of settling on the last one it fired.
       if (w.ammo === 0 && this.reloadSlot !== p.cur && !p.action) {
+        // Behind the pan it has time to reload the single-shot gun instead of going back to spraying.
+        if (this.swapT == null && this.shield && d.fireMode === 'single') { this.reloadSlot = p.cur; return; }
         // At long range, a bot with sense reloads its long-range gun instead of falling back on the shotgun.
         if (this.swapT == null && d.cls !== 'SHOTGUN' && this.preferredSlot(dist) === p.cur && Math.random() < S.gunSense) {
           this.reloadSlot = p.cur;
@@ -368,6 +442,13 @@
         return;
       }
       this.swapT = null;
+      // Shielding: one careful shot at a time suits a single-shot gun, if it has one.
+      const od = SV.defOf(o.type);
+      if (this.shield && d.fireMode !== 'single' && od && od.fireMode === 'single' && o.ammo > 0 && !p.bursts.length && !p.action) {
+        this.qsT = null; this.spraying = false;
+        p.switchTo(other);
+        return;
+      }
       // Better players follow one reload with the other gun's, or they lose the quickswitch.
       if (S.reloadBoth && this.topUp && w.ammo >= this.enoughAmmo(d) && o.ammo === 0) {
         this.topUp = false; this.reloadSlot = other; this.qsT = null; this.spraying = false;
@@ -406,9 +487,271 @@
       const f = this.p.world && this.p.world.field;
       if (!f) return;
       const blocked = f.blocked(this.p.pos, this.t.pos);
-      if (blocked && !this.sightBlocked) this.shootBlind = Math.random() > this.S.losCare;
+      if (blocked && !this.sightBlocked) {
+        this.shootBlind = Math.random() > this.S.losCare;
+        this.breakWant = this.o.fire && Math.random() < this.S.breakCare;
+      }
       this.sightBlocked = blocked;
+      this.breaking = blocked && this.breakWant && this.canBreak(f);
       this.noSightT = blocked ? this.noSightT + dt : 0;
+    }
+
+    // Worth shooting out? You have to be right behind the only obstacle in the way, the mag has to hold enough
+    // to break it, and what's left in both guns has to be enough to still finish you.
+    canBreak(f) {
+      const p = this.p, t = this.t, d = p.activeDef, S = this.S;
+      if (d.kind !== 'gun' || p.action) return false;
+      const list = f.blockers(p.pos, t.pos);
+      if (list.length !== 1) return false;
+      const o = list[0];
+      if (Math.hypot(o.x - t.pos.x, o.y - t.pos.y) - o.r > BREAK_NEAR) return false;
+      const ammo = p.slots[p.cur].ammo, hit = d.bullet.damage * d.bulletCount;
+      const needed = Math.ceil(o.health / (hit * d.bullet.obstacleDamage));
+      if (needed > ammo) return false;
+      const other = p.slots[p.cur === 0 ? 1 : 0], od = SV.defOf(other.type);
+      const left = (ammo - needed) * hit + (od && od.kind === 'gun' ? other.ammo * od.bullet.damage * od.bulletCount : 0);
+      return left >= t.health * S.spare;
+    }
+
+    // The closest spot with an obstacle between it and you.
+    findCover() {
+      const p = this.p, t = this.t, f = p.world && p.world.field, reach = this.S.coverReach;
+      if (!f) return null;
+      const view = this.o.view && this.o.view();
+      let best = null, bestD = Infinity;
+      for (const o of f.near(p.pos.x, p.pos.y, reach + 3)) {
+        if (o.dead) continue;
+        const s = this.coverSpot(o), d = Math.hypot(s.x - p.pos.x, s.y - p.pos.y);
+        if (d > reach || d >= bestD || Math.hypot(s.x - t.pos.x, s.y - t.pos.y) < COVER_MIN_FROM_YOU) continue;
+        if (view && (Math.abs(s.x - t.pos.x) > view.hw || Math.abs(s.y - t.pos.y) > view.hh)) continue;
+        if (!f.isFree(s.x, s.y, p.rad) || !f.blocked(s, t.pos)) continue;
+        bestD = d; best = o;
+      }
+      return best;
+    }
+
+    coverSpot(o) {
+      const dx = o.x - this.t.pos.x, dy = o.y - this.t.pos.y, d = Math.hypot(dx, dy) || 1, r = o.r + this.p.rad + COVER_GAP;
+      return { x: o.x + (dx / d) * r, y: o.y + (dy / d) * r };
+    }
+
+    startCover(trip) {
+      const o = this.findCover();
+      if (!o) return;
+      this.cover = { o, trip, until: trip ? this.p.world.time + COVER_TRIP : Infinity };
+      this.coverUses++;
+      this.path = null; this.planT = 0;
+    }
+
+    // Reloads when it feels safe, even with bullets left, and heads for cover to do it. Safe means you can't
+    // see it, you're reloading (if it's good enough to notice), or you're far away and haven't fired lately.
+    reloadThinking(dist, dt) {
+      const p = this.p, t = this.t, S = this.S, world = p.world, f = world && world.field;
+      if (world && world.bullets.some((b) => b.alive && b.owner === t)) this.quietT = 0; else this.quietT += dt;
+      if (p.cur === 2 || this.mode !== 'hold' || this.fightMelee()) { this.cover = null; this.wasReloading = false; return; }
+      const w = p.slots[p.cur], d = p.activeDef;
+      if (d.kind !== 'gun') return;
+      const reloading = !!(p.action || p.reloadAgain);
+      if (!reloading) this.sneak = false;
+      if (f && !this.o.still) {
+        if (reloading && !this.wasReloading && !this.cover && this.timeToFire() > COVER_MIN_RELOAD && Math.random() < S.coverCare) this.startCover(false);
+        if (this.cover) {
+          const c = this.cover, s = c.o.dead ? null : this.coverSpot(c.o), there = s && Math.hypot(s.x - p.pos.x, s.y - p.pos.y) < COVER_ARRIVED;
+          if (!s || (c.peek ? (world.time > c.until && !reloading) || d.fireMode !== 'burst'
+            : c.trip ? world.time > c.until : !reloading && !this.reloadSlot)) {
+            if (c.peek) this.peekT = rand(PEEK_EVERY[0], PEEK_EVERY[1]);
+            this.cover = null;
+          }
+          else if (c.trip && there) {
+            this.cover = null;
+            if (w.ammo < d.maxClip) { this.sneak = true; this.sneaks++; this.qsT = null; this.spraying = false; p.tryReload(); }
+          }
+        }
+      }
+      this.wasReloading = reloading;
+      // A burst gun fights from behind something: see peekStep.
+      if (f && !this.o.still && !this.cover && !reloading && d.fireMode === 'burst' && (this.peekT -= dt) <= 0) {
+        this.peekT = rand(PEEK_EVERY[0], PEEK_EVERY[1]);
+        if (Math.random() < S.peekCare) {
+          const spot = this.findCover();
+          if (spot) {
+            this.cover = { o: spot, peek: true, until: world.time + rand(PEEK_STAY[0], PEEK_STAY[1]), out: false, t: 0, side: 1, bursts: 1, ammo: 0 };
+            this.peeks++;
+            this.path = null; this.planT = 0;
+          }
+        }
+      }
+      if ((this.sneakT -= dt) > 0) return;
+      this.sneakT = rand(SNEAK_EVERY[0], SNEAK_EVERY[1]);
+      if (reloading || this.breaking || p.bursts.length) return;
+      const full = w.ammo / d.maxClip;
+      const hidden = this.sightBlocked, reads = S.sneakReads && !!t.action;
+      const calm = this.quietT > S.sneakQuiet && dist > SNEAK_FAR && !this.spraying && this.qsT == null;
+      const quiet = calm && full <= S.sneakAt * SNEAK_IN_VIEW;
+      const safe = hidden || reads || quiet || (S.sneakReads && this.panWait) || this.shield;
+      // An empty gun comes first, or it could keep topping up one gun and never use the other again.
+      const other = p.cur === 0 ? 1 : 0, o = p.slots[other], od = SV.defOf(o.type);
+      if (od && od.kind === 'gun' && o.ammo === 0 && S.reloadBoth && w.ammo > 0 && (hidden || reads || (calm && full <= S.sneakAt)) && Math.random() < S.sneakCare) {
+        this.reloadSlot = other; this.topUp = false; this.qsT = null; this.spraying = false;
+        p.switchTo(other);
+        return;
+      }
+      if (w.ammo > 0 && w.ammo < d.maxClip && full <= S.sneakAt && safe && Math.random() < S.sneakCare) {
+        this.qsT = null; this.spraying = false; this.sneak = true; this.sneaks++;
+        p.tryReload();
+        return;
+      }
+      // Topped up and still hidden: the other gun's turn.
+      if (hidden && S.reloadBoth && od && od.kind === 'gun' && w.ammo >= d.maxClip && o.ammo < this.enoughAmmo(od) && o.ammo < d.maxClip * S.sneakAt && Math.random() < S.sneakCare) {
+        this.reloadSlot = other; this.topUp = false; this.qsT = null; this.spraying = false;
+        p.switchTo(other);
+        return;
+      }
+      if (f && !this.o.still && !this.cover && w.ammo > 0 && full <= S.sneakAt * COVER_TRIP_AT && !safe && Math.random() < S.coverCare * S.sneakCare) this.startCover(true);
+    }
+
+    // Beside the obstacle, on one side, where it can see you.
+    peekSpot(o, side) {
+      const dx = o.x - this.t.pos.x, dy = o.y - this.t.pos.y, d = Math.hypot(dx, dy) || 1, r = o.r + this.p.rad + PEEK_SIDE;
+      return { x: o.x - (dy / d) * r * side, y: o.y + (dx / d) * r * side };
+    }
+
+    // The nearer side with a clear shot at you, or 0 if neither has one.
+    peekSide(o) {
+      const p = this.p, f = p.world.field;
+      const ok = [1, -1].filter((side) => { const s = this.peekSpot(o, side); return f.isFree(s.x, s.y, p.rad) && !f.blocked(s, this.t.pos); });
+      if (ok.length < 2) return ok[0] || 0;
+      const d = (side) => { const s = this.peekSpot(o, side); return Math.hypot(s.x - p.pos.x, s.y - p.pos.y); };
+      return d(ok[0]) <= d(ok[1]) ? ok[0] : ok[1];
+    }
+
+    // Hide, step out to one side, fire a burst or two, step back, and repeat.
+    peekStep(dt) {
+      const p = this.p, c = this.cover, w = p.slots[p.cur], d = p.activeDef, hide = this.coverSpot(c.o);
+      if (p.action || p.reloadAgain) { c.out = false; return hide; }
+      c.t -= dt;
+      if (!c.out) {
+        if (c.t > 0 || !this.sightBlocked) return hide;
+        const side = this.peekSide(c.o);
+        if (!side) { c.t = PEEK_RETRY; return hide; }
+        c.out = true; c.side = side; c.t = PEEK_OUT_MAX; c.ammo = w.ammo;
+        c.bursts = PEEK_BURSTS[0] + Math.floor(Math.random() * (PEEK_BURSTS[1] - PEEK_BURSTS[0] + 1));
+        this.path = null; this.planT = 0;
+        return this.peekSpot(c.o, side);
+      }
+      if ((c.ammo - w.ammo >= (d.burstCount || 1) * c.bursts && !p.bursts.length) || c.t <= 0) {
+        c.out = false; c.t = rand(this.S.peekHide[0], this.S.peekHide[1]);
+        this.path = null; this.planT = 0;
+        return hide;
+      }
+      return this.peekSpot(c.o, c.side);
+    }
+
+    // One of your shots coming straight at it, or one that just landed. It takes its reaction time to notice.
+    threatThinking(dt) {
+      const p = this.p, t = this.t, world = p.world;
+      const hurt = p.health < this.lastHealth;
+      this.lastHealth = p.health;
+      let incoming = false;
+      if (world) for (const b of world.bullets) {
+        if (!b.alive || b.owner !== t) continue;
+        const rx = p.pos.x - b.pos.x, ry = p.pos.y - b.pos.y, along = rx * b.dir.x + ry * b.dir.y;
+        if (along > 0 && along <= b.distance - b.traveled + p.rad && Math.abs(rx * b.dir.y - ry * b.dir.x) <= p.rad + ATTACK_MARGIN) { incoming = true; break; }
+      }
+      this.threatAge = incoming || hurt ? this.threatAge + dt : Math.max(0, this.threatAge - dt);   // a stream of fast shots adds up
+      if (hurt || this.threatAge >= this.S.react) this.attackLinger = ATTACK_LINGER;
+      else this.attackLinger -= dt;
+      this.attacked = this.attackLinger > 0;
+    }
+
+    // You're spraying it and it has a pan: it keeps the pan toward you and turns out for one shot at a time.
+    shieldThinking(dt) {
+      const p = this.p, t = this.t, S = this.S, world = p.world;
+      if (!world || p.slots[2].type !== 'pan') return;
+      const now = world.time;
+      for (const b of world.bullets) {
+        if (b.owner !== t || b.reflectCount || now - b.born > SHOWER_WINDOW || this.recentShots.some((r) => r.id === b.shotId)) continue;
+        const rx = p.pos.x - b.start.x, ry = p.pos.y - b.start.y;
+        if (rx * b.dir.x + ry * b.dir.y > 0 && Math.abs(rx * b.dir.y - ry * b.dir.x) <= p.rad + SHOWER_NEAR) this.recentShots.push({ id: b.shotId, at: b.born });
+      }
+      this.recentShots = this.recentShots.filter((r) => now - r.at <= SHOWER_WINDOW);
+      this.showerT = this.recentShots.length >= S.showerShots ? SHOWER_LINGER : this.showerT - dt;
+      if (this.showerT <= 0 || this.mode !== 'hold' || this.fightMelee() || this.sightBlocked) {
+        this.shield = this.shieldRolled = this.shieldPeek = false;
+        return;
+      }
+      if (!this.shieldRolled) {
+        this.shieldRolled = true;
+        this.shield = Math.random() < S.shieldCare;
+        this.panOff = (gauss() * S.panErr * Math.PI) / 180;
+        this.shieldPeekIn = rand(S.shieldHold[0], S.shieldHold[1]);
+        if (this.shield) this.spraying = false;
+      }
+      if (!this.shield || p.cur === 2) return;
+      const w = p.slots[p.cur];
+      if (this.shieldPeek) {
+        if (w.ammo < this.shieldAmmo || (this.shieldPeekT -= dt) <= 0) {
+          this.shieldPeek = false; this.spraying = false;
+          this.shieldPeekIn = rand(S.shieldHold[0], S.shieldHold[1]);
+        }
+      } else if ((this.shieldPeekIn -= dt) <= 0 && w.ammo > 0 && !p.action && this.timeToFire() <= PAN_TURN / S.track) {
+        this.shieldPeek = true; this.shieldPeekT = SHIELD_PEEK_MAX; this.shieldAmmo = w.ammo;
+      }
+    }
+
+    // Your pan facing it, in your hand or on your back. Shots would come straight back, so it mostly waits
+    // for an opening, with an occasional shot. It takes its reaction time to notice you've turned.
+    panThinking(dt) {
+      const p = this.p, t = this.t, S = this.S;
+      let faced = false;
+      if (t.hasActivePan && t.hasActivePan()) {
+        const s = SV.MELEE.pan.reflectSurface[t.wearingPan ? 'unequipped' : 'equipped'];
+        let a = Math.atan2(t.dir.y, t.dir.x) + Math.atan2(-(s.p0.y + s.p1.y) / 2, (s.p0.x + s.p1.x) / 2) - Math.atan2(p.pos.y - t.pos.y, p.pos.x - t.pos.x);
+        while (a > Math.PI) a -= 2 * Math.PI;
+        while (a < -Math.PI) a += 2 * Math.PI;
+        faced = Math.abs(a) < PAN_FACE_CONE;
+      }
+      if (!faced) {
+        if (this.panFaced) { this.panFaced = false; this.panLag = S.react; }
+        this.panLag -= dt;
+        this.panWait = this.panRespected && this.panLag > 0;
+        return;
+      }
+      if (!this.panFaced) {
+        this.panFaced = true;
+        this.panRespected = Math.random() < S.panRespect;
+        this.panProbeT = rand(PAN_PROBE_EVERY[0], PAN_PROBE_EVERY[1]);
+      }
+      this.panProbeT -= dt;
+      if (this.panProbeT <= -PAN_PROBE_LEN) this.panProbeT = rand(PAN_PROBE_EVERY[0], PAN_PROBE_EVERY[1]);
+      this.panWait = this.panRespected && this.panProbeT > 0;
+    }
+
+    // Walks to the spot behind its cover and waits there. The spot moves as you do.
+    walkCover(dt) {
+      const p = this.p, c = this.cover, f = p.world.field, s = c.peek ? this.peekStep(dt) : this.coverSpot(c.o);
+      const left = Math.hypot(s.x - p.pos.x, s.y - p.pos.y);
+      if (left < COVER_ARRIVED) { this.dirIdx = -1; this.path = null; return true; }
+      if ((this.planT -= dt) <= 0 || !this.path) {
+        this.planT = this.S.replan;
+        this.path = f.findPath(p.pos, s, p.rad, COVER_GAP - 0.05, 1);
+        this.pathI = 0;
+      }
+      this.followPath(s);
+      return true;
+    }
+
+    // Heads for the next waypoint, then straight for the goal if one is given.
+    followPath(goal) {
+      const p = this.p;
+      while (this.path && this.pathI < this.path.length && Math.hypot(this.path[this.pathI].x - p.pos.x, this.path[this.pathI].y - p.pos.y) < WAYPOINT_REACHED) this.pathI++;
+      const atEnd = !this.path || this.pathI >= this.path.length;
+      if (atEnd && !goal) { this.path = null; return false; }
+      const w = atEnd ? goal : this.path[this.pathI], dx = w.x - p.pos.x, dy = w.y - p.pos.y, d = Math.hypot(dx, dy) || 1;
+      let best = 0, bestDot = -2;
+      DIRS.forEach((v, k) => { const q = (v.x * dx + v.y * dy) / d; if (q > bestDot) { bestDot = q; best = k; } });
+      this.dirIdx = best;
+      return true;
     }
 
     // Walks a path around obstacles when one is in the way of getting to you, or when it's lost sight of you
@@ -416,8 +759,10 @@
     navigate(dist, dt) {
       const p = this.p, t = this.t, f = p.world && p.world.field;
       if (!f || this.o.still) return false;
+      if (this.cover) return this.walkCover(dt);
       const closing = this.mode === 'rush' || dist > this.range()[1];
       const seeking = this.noSightT > this.S.seekAfter;
+      if (this.breaking && this.mode !== 'rush') { this.path = null; return false; }   // staying put to shoot it out
       if (!(closing || seeking) || !f.blocked(p.pos, t.pos, p.rad + NAV_CLEAR)) { this.path = null; return false; }
       if ((this.planT -= dt) <= 0 || !this.path) {
         this.planT = this.S.replan;
@@ -425,13 +770,7 @@
         this.pathI = 0;
       }
       if (!this.path) return false;
-      while (this.pathI < this.path.length && Math.hypot(this.path[this.pathI].x - p.pos.x, this.path[this.pathI].y - p.pos.y) < WAYPOINT_REACHED) this.pathI++;
-      if (this.pathI >= this.path.length) { this.path = null; return false; }
-      const w = this.path[this.pathI], dx = w.x - p.pos.x, dy = w.y - p.pos.y, d = Math.hypot(dx, dy) || 1;
-      let best = 0, bestDot = -2;
-      DIRS.forEach((v, k) => { const q = (v.x * dx + v.y * dy) / d; if (q > bestDot) { bestDot = q; best = k; } });
-      this.dirIdx = best;
-      return true;
+      return this.followPath(null);
     }
 
     // Long runs can overshoot a narrow band or the screen edge, so a dynamic bot turns early.
@@ -497,7 +836,7 @@
       const dist = Math.hypot(p.pos.x - t.pos.x, p.pos.y - t.pos.y);
 
       // behaviour state
-      if (this.mode === 'hold' && (this.rushIn -= dt) <= 0) {
+      if (this.mode === 'hold' && (this.rushIn -= dt) <= 0 && !(this.cover && !this.cover.peek)) {
         this.mode = 'rush'; this.dirT = 0;
         this.modeT = rand(RUSH_GIVE_UP[0], RUSH_GIVE_UP[1]) + Math.max(0, dist - RUSH_GIVE_UP_DIST) / RUSH_APPROACH_SPEED;
       }
@@ -521,6 +860,7 @@
       this.checkDodge(dt);
       if (this.offCourse(dist)) this.dirT = 0;
       this.checkSight(dt);
+      if (this.o.fire) { this.threatThinking(dt); this.shieldThinking(dt); this.panThinking(dt); this.reloadThinking(dist, dt); }
       const onPath = this.dodgeT <= 0 && this.navigate(dist, dt);
       if (!onPath && p.world && p.world.field && this.dirIdx >= 0 && this.dodgeT <= 0) {
         // turn before walking into something, and try another way if it's not getting anywhere
@@ -586,8 +926,12 @@
         const onTarget = Math.abs(diff) < Math.max(0.05, Math.atan2(t.rad * 1.5, dist));
         const isAuto = d.kind === 'gun' && (d.fireMode === 'auto' || d.fireMode === 'burst');
         const ammo = p.slots[p.cur].ammo;
-        const midReload = d.kind === 'gun' && (p.action || p.reloadAgain || this.reloadSlot === p.cur) && ammo < this.enoughAmmo(d) && dist >= RELOAD_INTERRUPT;
-        const holdFire = this.sightBlocked && !this.shootBlind;      // don't waste shots on a tree in the way
+        const midReload = d.kind === 'gun' && (p.action || p.reloadAgain || this.reloadSlot === p.cur) && ammo < this.enoughAmmo(d) && dist >= RELOAD_INTERRUPT
+          // Part-empty, in view: under direct attack it fires back, which ends the reload, and a sneaked
+          // shell-by-shell reload never delays a ready shot.
+          && !(ammo > 0 && !this.sightBlocked && (this.attacked || (this.sneak && d.maxReload < d.maxClip)));
+        const holdFire = (this.sightBlocked && !this.shootBlind && !this.breaking) || this.panWait    // don't waste shots on a tree or a pan
+          || (this.shield && !this.shieldPeek);                                                    // shielding: it only fires when it peeks
         const hasAmmo = d.kind !== 'gun' || (ammo > 0 && !midReload && !holdFire);
         // Automatic guns are mostly mag dumped: once it starts, it keeps the trigger held until the
         // mag is empty, you're out of range or its aim is way off. Sometimes it's just a short burst.
@@ -605,7 +949,7 @@
           } else if (hasAmmo && p.slots[p.cur].cooldown < 0) { i.shootStart = true; this.fireT = rand(0.05, 0.25); }
         }
         const twoGuns = p.cur < 2 && p.slots[1 - p.cur].type;
-        if (d.kind === 'gun' && ((ammo === 0 && !twoGuns) || (this.reloadSlot === p.cur && ammo < this.enoughAmmo(d)))) p.tryReload();
+        if (d.kind === 'gun' && ((ammo === 0 && !twoGuns) || (this.reloadSlot === p.cur && ammo < this.enoughAmmo(d) && !(this.attacked && ammo > 0)))) p.tryReload();
       }
     }
   }
