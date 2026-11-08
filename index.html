@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aim Survev</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <span id="hud-mode"></span>
+  <div id="hud-stats"></div>
+  <span id="hud-right"></span>
+</div>
+
+<div id="countdown"></div>
+<div id="gameover"></div>
+
+<section id="menu" class="screen on">
+  <div class="wrap">
+    <header class="brand">
+      <div>
+        <div class="logo">AIM<span>/</span>SURVEV</div>
+        <div class="sub">2D AIM TRAINER FOR SURVEV.IO</div>
+      </div>
+      <div class="head-btns">
+        <button id="binds-btn" class="btn">KEYBINDS</button>
+        <button id="xh-btn" class="btn xh-btn"><img id="xh-btn-img" alt=""> CROSSHAIR</button>
+      </div>
+    </header>
+    <div class="tabs">
+      <button class="tab" data-g="standard">STANDARD</button>
+      <button class="tab" data-g="survev">SURVEV</button>
+    </div>
+    <div id="mode-list" class="cards"></div>
+    <footer class="keys">ESC — MENU &nbsp;·&nbsp; R — RESTART &nbsp;·&nbsp; ENTER — START</footer>
+  </div>
+</section>
+
+<section id="settings" class="screen">
+  <div class="wrap">
+    <button id="btn-back" class="link">← BACK</button>
+    <h1 id="set-title"></h1>
+    <p id="set-desc"></p>
+    <div id="set-view" class="tabs">
+      <button class="tab" data-view="simple">SIMPLE</button>
+      <button class="tab" id="set-view-full" data-view="full">FULL</button>
+    </div>
+    <div id="set-list"></div>
+    <div class="actions">
+      <button id="btn-start" class="btn primary">START [ENTER]</button>
+      <span id="set-best" class="note"></span>
+    </div>
+  </div>
+</section>
+
+<section id="crosshair" class="screen">
+  <div class="wrap">
+    <button id="xh-back" class="link">← BACK</button>
+    <h1>CROSSHAIR</h1>
+    <p>Crosshairs from survev. Your pick is used as the real cursor in every mode.</p>
+    <div class="xh-layout">
+      <div>
+        <div class="label xh-label">STYLE</div>
+        <div id="xh-grid"></div>
+        <div id="xh-list"></div>
+      </div>
+      <div class="xh-side">
+        <div id="xh-preview">
+          <div class="xh-dot"></div>
+          <img id="xh-preview-img" alt="">
+        </div>
+        <div class="note">HOVER THE BOX TO TEST IT</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="binds" class="screen">
+  <div class="wrap">
+    <button id="binds-back" class="link">← BACK</button>
+    <h1>KEYBINDS</h1>
+    <p>Used in SURVEV modes. Click a slot, then press a key. Backspace clears it, Esc cancels. Each key can only do one thing.</p>
+    <div id="binds-list"></div>
+    <div class="actions"><button id="binds-reset" class="btn">RESET TO DEFAULTS</button></div>
+  </div>
+</section>
+
+<section id="results" class="screen">
+  <div class="wrap">
+    <div id="res-mode" class="kicker"></div>
+    <div id="res-score" class="big"></div>
+    <div id="res-best"></div>
+    <div id="res-rows" class="grid"></div>
+    <div class="actions">
+      <button id="btn-retry" class="btn primary">RETRY [R]</button>
+      <button id="btn-res-settings" class="btn">SETTINGS</button>
+      <button id="btn-res-menu" class="btn">MENU [ESC]</button>
+    </div>
+  </div>
+</section>
+
+<script src="js/core.js"></script>
+<script src="js/crosshairs.js"></script>
+<script src="js/modes/normal.js"></script>
+<script src="js/modes/flick.js"></script>
+<script src="js/modes/tracking.js"></script>
+<script src="js/binds.js"></script>
+<script src="js/survev/data.js"></script>
+<script src="js/survev/sim.js"></script>
+<script src="js/survev/bot.js"></script>
+<script src="js/survev/render.js"></script>
+<script src="js/survev/modes.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
