@@ -181,6 +181,23 @@
   SV.drawPlayer = drawPlayer;
 
   // ---------- world ----------
+  // client/src/objects/obstacle.ts: the sprite scales with the obstacle, and its layer decides whether it's
+  // under players (rocks, zIdx 10) or over them (trees, zIdx 800). What's left of a dead one is 75% opaque.
+  const PLAYER_Z = 18;
+  function drawObstacles(g, list, over, X, Y, S) {
+    const mine = list.filter((o) => (o.def.img.zIdx > PLAYER_Z) === over).sort((a, b) => a.scale - b.scale);
+    for (const o of mine) {
+      const img = o.def.img, s = o.scale * img.scale;
+      g.save();
+      g.globalAlpha = o.dead ? 0.75 : 1;
+      g.translate(X(o.x), Y(o.y));
+      g.rotate(o.rot);
+      g.scale(S, S);
+      sprite(g, o.dead ? img.residue : img.sprite, 0xffffff, 0.5, 0.5, s, s);
+      g.restore();
+    }
+  }
+
   // client/src/objects/particles.ts: bloodSplat. Each one rolls its look the first time it's drawn.
   function drawBlood(g, world, X, Y, S) {
     const B = SV.BLOOD;
@@ -229,6 +246,8 @@
     for (let y = y0; y <= y1; y += GRID) { g.moveTo(0, Y(y)); g.lineTo(W, Y(y)); }
     g.stroke();
 
+    const obstacles = world.field ? world.field.near(cam.x, cam.y, Math.hypot(W, H) / 2 / ppu + 8) : [];
+    drawObstacles(g, obstacles, false, X, Y, S);
     for (const p of world.players) if (!p.dead) drawPlayer(g, p, X(p.pos.x), Y(p.pos.y), S);
     if (!AT.prefs || AT.prefs.blood !== 'off') drawBlood(g, world, X, Y, S);
 
@@ -252,6 +271,8 @@
       sprite(g, 'player-bullet-trail-02', col, 0.5, 0.5, 0.8, bd.tracerWidth);
       g.restore();
     }
+
+    drawObstacles(g, obstacles, true, X, Y, S);
 
     // optional training feedback: floating damage numbers
     if (extras.popups) {

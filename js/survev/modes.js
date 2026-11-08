@@ -205,6 +205,29 @@
   const botArmor = () => [armorSetting('botHelmet', 'BOT HELMET', 'bot', 'helmet'), armorSetting('botVest', 'BOT VEST', 'bot', 'vest')];
   const myArmor = () => [armorSetting('myHelmet', 'YOUR HELMET', 'me', 'helmet'), armorSetting('myVest', 'YOUR VEST', 'me', 'vest')];
 
+  // Top-down look at a 1x screen's worth of the real placement rules.
+  const OBSTACLE_AMOUNT = { few: 0.5, normal: 1, many: 2 };
+  function pvObstacles(p) {
+    const { g, w, h, v, s } = p;
+    if (!OBSTACLE_AMOUNT[v]) { pvText(['NO OBSTACLES', 'OPEN GRASS.'])(p); return; }
+    if (s.shown !== v) {
+      const field = new SV.ObstacleField(OBSTACLE_AMOUNT[v]);
+      s.items = field.near(0, 0, 40);
+      s.shown = v;
+    }
+    const ppu = w / 56, cx = w / 2, cy = h / 2;
+    g.fillStyle = '#80af49';
+    g.fillRect(0, 0, w, h);
+    for (const o of s.items) {
+      g.fillStyle = o.kind === 'tree' ? '#3e502e' : '#b3b3b3';
+      g.beginPath();
+      g.arc(cx + o.x * ppu, cy + o.y * ppu, (o.kind === 'tree' ? o.r * 2 : o.r) * ppu, 0, Math.PI * 2);
+      g.fill();
+    }
+    miniPlayer(g, cx, cy, ppu, '#f8c574');
+    AT.pv.text(g, v === 'normal' ? "THE GAME'S DENSITY" : v === 'few' ? 'HALF THE DENSITY' : 'DOUBLE THE DENSITY', 8, 8, { size: 13, color: '#fff' });
+  }
+
   function pvText(lines) {
     return (p) => {
       const ls = typeof lines === 'function' ? lines(p) : lines;
@@ -220,6 +243,8 @@
   ];
   const botRange = { key: 'botRange', label: 'BOT DISTANCE', default: 'dynamic', preview: pvView,
     options: [{ v: 'dynamic', label: 'DYNAMIC' }, { v: 8, label: 'CLOSE' }, { v: 16, label: 'MID' }, { v: 24, label: 'FAR' }, { v: 34, label: 'LONG' }] };
+  const obstaclesSetting = { key: 'obstacles', label: 'ROCKS AND TREES', default: 'off', preview: pvObstacles,
+    options: [{ v: 'off', label: 'OFF' }, { v: 'few', label: 'FEW' }, { v: 'normal', label: 'NORMAL' }, { v: 'many', label: 'MANY' }] };
   const scope = { key: 'scope', label: 'SCOPE', default: '1xscope', preview: pvView,
     options: SCOPES.map((v) => ({ v, label: v.replace('scope', '').toUpperCase() + ` (${RADII[v]})` })) };
   const popups = { key: 'popups', label: 'DAMAGE NUMBERS', default: 'on',
@@ -238,6 +263,7 @@
   // ---------- game ----------
   function createGame(cfg, api, kind) {
     const world = new SV.World();
+    if (OBSTACLE_AMOUNT[cfg.obstacles]) world.field = new SV.ObstacleField(OBSTACLE_AMOUNT[cfg.obstacles]);
     const zoom = RADII[cfg.scope];
     const timeline = [];
     const popupsArr = [];
@@ -327,7 +353,7 @@
       let at;
       for (let tries = 0; tries < 30; tries++) {
         at = { x: rand(-hw, hw), y: rand(-top, bottom) };
-        if (Math.hypot(at.x, at.y) >= SPAWN_MIN_DIST) break;
+        if (Math.hypot(at.x, at.y) >= SPAWN_MIN_DIST && (!world.field || world.field.isFree(me.pos.x + at.x, me.pos.y + at.y, 2))) break;
       }
       return at;
     }
@@ -468,7 +494,7 @@
     group: 'survev',
     name: 'QUICKSWITCH',
     description: 'A strafing bot keeps changing its range at random. Shoot, switch, shoot again — the timeline shows every switch delay and whether it was free.',
-    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'scope', 'duration'],
+    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'obstacles', 'scope', 'duration'],
     settings: [
       ...loadout(),
       botRange,
@@ -478,6 +504,7 @@
       ...botArmor(),
       ...adrenaline(),
       ...touchSettings(),
+      obstaclesSetting,
       scope,
       popups,
       { key: 'duration', label: 'DURATION', default: 60, preview: AT.pv.duration,
@@ -491,7 +518,7 @@
     group: 'survev',
     name: '1V1',
     description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee, and it fights back.',
-    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'scope', 'duration'],
+    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'obstacles', 'scope', 'duration'],
     settings: [
       ...loadout(),
       botRange,
@@ -509,6 +536,7 @@
         preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
       ...touchSettings(),
+      obstaclesSetting,
       scope,
       popups,
       { key: 'duration', label: 'DURATION', default: 120, preview: AT.pv.duration,

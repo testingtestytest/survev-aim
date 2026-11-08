@@ -22,6 +22,163 @@
     life: 0.5, drag: 1, images: ['part-splat-01', 'part-splat-02', 'part-splat-03'],
     scaleStart: 0.04, scaleEnd: [0.15, 0.2], fadeFrom: [0.75, 1], value: [0.45, 0.8], bulletRot: 1, meleeSpread: Math.PI / 3,
   };
+  // ---------- obstacles: rocks and trees ----------
+  // server/src/game/objects/obstacle.ts and shared/defs/mapObjects/obstacles/mapObstacleDefs.ts.
+  class Obstacle {
+    constructor(kind, x, y) {
+      const d = SV.OBSTACLE_DEFS[kind];
+      this.kind = kind; this.def = d; this.x = x; this.y = y;
+      this.maxScale = rand(d.scale.createMin, d.scale.createMax);
+      this.minScale = this.maxScale * d.scale.destroy;
+      this.scale = this.maxScale;
+      this.health = this.maxHealth = d.health;
+      this.height = d.height;
+      this.dead = false;
+      this.rot = randInt(0, 3) * Math.PI / 2;      // map.ts: a random quarter turn
+    }
+    get r() { return this.def.rad * this.scale; }
+    // obstacle.damage: shrinks with health, and only a wreck is left at zero
+    damage(amount) {
+      if (this.dead) return;
+      this.health = Math.max(0, this.health - amount);
+      const t = clamp(this.health / this.maxHealth, 0, 1);
+      this.scale = this.minScale + (this.maxScale - this.minScale) * t;
+      if (this.health <= 0) { this.dead = true; this.scale = this.minScale; }
+    }
+  }
+
+  const CHUNK = 32;              // units per side; obstacles are placed a chunk at a time as you explore
+  const PASS_GAP = 3.6;          // room left between obstacles so a player fits (this trainer's rule; the game only stops overlaps)
+  const SPAWN_CLEAR = 5;         // nothing grows right on the starting point
+  const PATH_RANGE = 44;         // furthest a single path plan looks
+  const PATH_PAD = 12;           // room around the straight line for going around things
+  const PATH_ARRIVE = 2.5;       // close enough to the goal
+  const DIAG = Math.SQRT2;
+
+  // An endless field at the game's density: count = density * area / 250000 (map.ts genDensitySpawn).
+  class ObstacleField {
+    constructor(mult) { this.mult = mult; this.chunks = new Map(); }
+    chunk(cx, cy) {
+      const key = cx + ',' + cy;
+      let list = this.chunks.get(key);
+      if (!list) { list = []; this.chunks.set(key, list); this.fill(cx, cy, list); }
+      return list;
+    }
+    fill(cx, cy, list) {
+      const existing = [];
+      for (let i = cx - 1; i <= cx + 1; i++) for (let j = cy - 1; j <= cy + 1; j++) {
+        const other = this.chunks.get(i + ',' + j);
+        if (other && other !== list) existing.push(...other);
+      }
+      for (const kind of Object.keys(SV.OBSTACLE_DEFS)) {
+        const d = SV.OBSTACLE_DEFS[kind], want = (d.density / d.densityArea) * CHUNK * CHUNK * this.mult;
+        const count = Math.floor(want + Math.random());
+        for (let n = 0; n < count; n++) {
+          for (let tries = 0; tries < 8; tries++) {
+            const o = new Obstacle(kind, (cx + Math.random()) * CHUNK, (cy + Math.random()) * CHUNK);
+            const clear = (q) => Math.hypot(q.x - o.x, q.y - o.y) >= q.r + o.r + PASS_GAP;
+            if (Math.hypot(o.x, o.y) < o.r + SPAWN_CLEAR || !existing.every(clear) || !list.every(clear)) continue;
+            list.push(o);
+            break;
+          }
+        }
+      }
+    }
+    near(x, y, r) {
+      const out = [];
+      const x0 = Math.floor((x - r) / CHUNK), x1 = Math.floor((x + r) / CHUNK), y0 = Math.floor((y - r) / CHUNK), y1 = Math.floor((y + r) / CHUNK);
+      for (let i = x0; i <= x1; i++) for (let j = y0; j <= y1; j++) out.push(...this.chunk(i, j));
+      return out;
+    }
+    isFree(x, y, r) { return this.near(x, y, r + 3).every((o) => o.dead || Math.hypot(o.x - x, o.y - y) >= o.r + r); }
+    // Does a live obstacle, grown by extra, cross this line?
+    blocked(a, b, extra = 0) {
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      for (const o of this.near((a.x + b.x) / 2, (a.y + b.y) / 2, len / 2 + 3 + extra)) {
+        if (!o.dead && segCircle(a.x, a.y, b.x, b.y, o.x, o.y, o.r + extra) != null) return true;
+      }
+      return false;
+    }
+    // Would moving along dir run into something soon? Moving away from what you're touching doesn't count.
+    ahead(pos, dir, look, rad) {
+      for (const o of this.near(pos.x, pos.y, look + rad + 3)) {
+        if (o.dead) continue;
+        const rx = o.x - pos.x, ry = o.y - pos.y, along = rx * dir.x + ry * dir.y, reach = o.r + rad;
+        if (along <= 0 || along > look + reach) continue;
+        if (Math.abs(rx * dir.y - ry * dir.x) < reach) return true;
+      }
+      return false;
+    }
+    // A* on a 1-unit grid with 8-way moves, the same moves a player's keys make. Cells are off limits within
+    // rad + clear of an obstacle, except that right beside the start only real contact counts, so a bot
+    // hugging a tree can still leave. If the goal can't be reached it goes to the closest cell it found.
+    findPath(from, to, rad, clear) {
+      let gx = to.x, gy = to.y;
+      const L = Math.hypot(gx - from.x, gy - from.y);
+      if (L > PATH_RANGE) { gx = from.x + ((gx - from.x) / L) * PATH_RANGE; gy = from.y + ((gy - from.y) / L) * PATH_RANGE; }
+      const ox = Math.floor(Math.min(from.x, gx) - PATH_PAD), oy = Math.floor(Math.min(from.y, gy) - PATH_PAD);
+      const w = Math.ceil(Math.abs(gx - from.x)) + 2 * PATH_PAD + 2, h = Math.ceil(Math.abs(gy - from.y)) + 2 * PATH_PAD + 2, n = w * h;
+      const wall = new Uint8Array(n), cost = new Float32Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), done = new Uint8Array(n);
+      for (const o of this.near(ox + w / 2, oy + h / 2, Math.hypot(w, h) / 2 + 3)) {
+        if (o.dead) continue;
+        const R = o.r + rad + clear, x0 = Math.max(0, Math.floor(o.x - R - ox)), x1 = Math.min(w - 1, Math.ceil(o.x + R - ox));
+        const y0 = Math.max(0, Math.floor(o.y - R - oy)), y1 = Math.min(h - 1, Math.ceil(o.y + R - oy));
+        for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
+          const cx = ox + i + 0.5, cy = oy + j + 0.5, d = Math.hypot(cx - o.x, cy - o.y);
+          const limit = Math.hypot(cx - from.x, cy - from.y) < 2 ? o.r + rad - 0.05 : R;
+          if (d < limit) wall[j * w + i] = 1;
+        }
+      }
+      const guess = (c) => {
+        const dx = Math.abs(ox + (c % w) + 0.5 - gx), dy = Math.abs(oy + Math.floor(c / w) + 0.5 - gy);
+        return Math.max(dx, dy) + (DIAG - 1) * Math.min(dx, dy);
+      };
+      const start = Math.floor(from.y - oy) * w + Math.floor(from.x - ox);
+      const heap = [[guess(start), start]];
+      const push = (e) => { let i = heap.push(e) - 1; while (i) { const q = (i - 1) >> 1; if (heap[q][0] <= heap[i][0]) break; [heap[q], heap[i]] = [heap[i], heap[q]]; i = q; } };
+      const pop = () => {
+        const top = heap[0], last = heap.pop();
+        if (heap.length) {
+          heap[0] = last;
+          for (let i = 0; ;) {
+            let m = i; const a = 2 * i + 1, b = a + 1;
+            if (a < heap.length && heap[a][0] < heap[m][0]) m = a;
+            if (b < heap.length && heap[b][0] < heap[m][0]) m = b;
+            if (m === i) break;
+            [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
+          }
+        }
+        return top;
+      };
+      cost[start] = 0;
+      let best = start, bestH = guess(start);
+      while (heap.length) {
+        const c = pop()[1];
+        if (done[c]) continue;
+        done[c] = 1;
+        const here = guess(c);
+        if (here < bestH) { bestH = here; best = c; }
+        if (here <= PATH_ARRIVE) break;
+        const cx = c % w, cy = Math.floor(c / w);
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const m = ny * w + nx;
+          if (wall[m] || done[m]) continue;
+          if (dx && dy && (wall[cy * w + nx] || wall[ny * w + cx])) continue;   // no cutting corners
+          const g = cost[c] + (dx && dy ? DIAG : 1);
+          if (g < cost[m]) { cost[m] = g; prev[m] = c; push([g + guess(m), m]); }
+        }
+      }
+      if (best === start) return null;
+      const path = [];
+      for (let c = best; c !== start; c = prev[c]) path.push({ x: ox + (c % w) + 0.5, y: oy + Math.floor(c / w) + 0.5 });
+      return path.reverse();
+    }
+  }
+  SV.ObstacleField = ObstacleField;
+
   SV.defOf = (type) => SV.GUNS[type] || SV.MELEE[type] || null;
   const recoilTimeOf = (d) => (d.recoilTime == null ? 1e10 : d.recoilTime);
 
@@ -288,6 +445,17 @@
         this.pos.x += mx * this.speed * dt;
         this.pos.y += my * this.speed * dt;
       }
+      // player.update: pushed out of anything it walked into. The game takes 5 small steps per server
+      // tick; a single 120Hz step moves about the same distance as one of those.
+      if (this.world.field) {
+        for (const o of this.world.field.near(this.pos.x, this.pos.y, this.rad + 3)) {
+          if (o.dead) continue;
+          const dx = this.pos.x - o.x, dy = this.pos.y - o.y, d = Math.hypot(dx, dy), pen = o.r + this.rad - d;
+          if (pen <= 0) continue;
+          const nx = d > 1e-6 ? dx / d : 1, ny = d > 1e-6 ? dy / d : 0;
+          this.pos.x += nx * (pen + 0.001); this.pos.y += ny * (pen + 0.001);
+        }
+      }
 
       this.weaponUpdate(dt);
 
@@ -361,6 +529,20 @@
       this.recoilTicker = 0;
 
       const shotId = (this.world.shotSeq = (this.world.shotSeq || 0) + 1);
+      // weaponManager.fireWeapon: a barrel poking into an obstacle fires from its near side
+      let clip = null;
+      if (this.world.field) {
+        let clipLen = d.barrelLength + 1.5;
+        for (const o of this.world.field.near(gunPos.x, gunPos.y, clipLen + 3)) {
+          if (o.dead || o.height < C.bulletHeight) continue;
+          const t = segCircle(gunPos.x, gunPos.y, gunPos.x + dir.x * clipLen, gunPos.y + dir.y * clipLen, o.x, o.y, o.r);
+          if (t == null) continue;
+          const hx = gunPos.x + dir.x * clipLen * t, hy = gunPos.y + dir.y * clipLen * t, hd = Math.hypot(hx - o.x, hy - o.y) || 1;
+          const nx = (hx - o.x) / hd, ny = (hy - o.y) / hd, px = hx + nx * 0.01, py = hy + ny * 0.01;
+          const len = Math.hypot(px - gunPos.x, py - gunPos.y);
+          if (len < clipLen) { clipLen = len; clip = { x: px, y: py, nx, ny }; }
+        }
+      }
       for (let k = 0; k < d.bulletCount; k++) {
         const deviation = firstShotAccuracy ? 0 : rand(-0.5, 0.5) * spread;
         const shotDir = rotate(dir, deviation * DEG);
@@ -368,6 +550,14 @@
         if (k > 0) {
           start.x += rand(-d.jitter, d.jitter) * 1.11;
           start.y += rand(-d.jitter, d.jitter) * 1.11;
+        }
+        if (clip) {
+          const tx = start.x - gunPos.x, ty = start.y - gunPos.y, tl = Math.hypot(tx, ty) || 1e-5, ux = tx / tl, uy = ty / tl;
+          const dn = ux * clip.nx + uy * clip.ny;
+          if (dn < -0.00001) {
+            const t = ((clip.x - gunPos.x) * clip.nx + (clip.y - gunPos.y) * clip.ny) / dn;
+            if (t < tl) { const keep = t - 0.1; start = { x: gunPos.x + ux * keep, y: gunPos.y + uy * keep }; }
+          }
         }
         this.world.fireBullet(this, d, start, shotDir, k === 0, shotId);
       }
@@ -395,7 +585,8 @@
       }
     }
 
-    // weaponManager.getMeleeCollider / meleeDamage (players only, no obstacles)
+    // weaponManager.getMeleeCollider / meleeDamage. Players come before obstacles, the deepest overlap comes
+    // first, and only cleaving weapons hit more than one thing. An obstacle in the way protects a player.
     meleeCollider(d) {
       const ang = Math.atan2(this.dir.y, this.dir.x);
       const off = rotate(d.attack.offset, ang);
@@ -403,9 +594,24 @@
     }
     meleeDamage(d) {
       const col = this.meleeCollider(d);
+      const nearby = this.world.field ? this.world.field.near(col.x, col.y, col.rad + 3).filter((o) => !o.dead && o.height >= C.meleeHeight) : [];
+      const hits = [];
+      for (const o of nearby) {
+        const pen = col.rad + o.r - Math.hypot(o.x - col.x, o.y - col.y);
+        if (pen > 0) hits.push({ o, pen, prio: 1 });
+      }
       for (const p of this.world.players) {
         if (p === this || p.dead) continue;
-        if (Math.hypot(p.pos.x - col.x, p.pos.y - col.y) < col.rad + p.rad) {
+        const pen = col.rad + p.rad - Math.hypot(p.pos.x - col.x, p.pos.y - col.y);
+        if (pen <= 0) continue;
+        if (nearby.some((o) => segCircle(this.pos.x, this.pos.y, p.pos.x, p.pos.y, o.x, o.y, o.r) != null)) continue;
+        hits.push({ p, pen, prio: 0 });
+      }
+      hits.sort((a, b) => (a.prio === b.prio ? b.pen - a.pen : a.prio - b.prio));
+      for (const h of d.cleave ? hits : hits.slice(0, 1)) {
+        if (h.o) { h.o.damage(d.damage * d.obstacleDamage); continue; }
+        const p = h.p;
+        {
           const res = p.damage(d.damage, d);
           if (res && this.events.hit) this.events.hit(this, p, res, d);
           // player.ts: melee blood stays at the target's position and drifts along the swing
@@ -421,6 +627,7 @@
       this.players = [];
       this.bullets = [];
       this.blood = [];
+      this.field = null;     // obstacles, when the mode has them
       this.time = 0;
     }
     addPlayer(x, y, opts) { const p = new Player(this, x, y, opts); this.players.push(p); return p; }
@@ -469,6 +676,25 @@
           const ph = p.hasActivePan() ? this.panHit(b, nx, ny, step, p) : null;
           if (t != null && (!ph || t * step < ph.dist)) { if (t < hitT) { hitT = t; hit = p; } }
           else if (ph && ph.dist < panD) { panD = ph.dist; pan = ph; panBy = p; }
+        }
+        // bullet.ts: obstacles tall enough stop the bullet and take its damage times the bullet's obstacle multiplier
+        if (this.field) {
+          let ob = null, obD = Infinity;
+          for (const o of this.field.near((b.pos.x + nx) / 2, (b.pos.y + ny) / 2, step + 3)) {
+            if (o.dead || o.height < C.bulletHeight) continue;
+            const t = segCircle(b.pos.x, b.pos.y, nx, ny, o.x, o.y, o.r);
+            if (t != null && t * step < obD) { obD = t * step; ob = o; }
+          }
+          if (ob && obD < (hit ? hitT * step : Infinity) && obD < (pan ? panD : Infinity)) {
+            b.traveled += step;
+            b.pos.x += b.dir.x * obD; b.pos.y += b.dir.y * obD;
+            let dmg = b.damage / (b.reflectCount + 1);
+            if (C.bulletFalloff) dmg *= remap(clamp(b.traveled / b.distance, 0, 1), 0, 1, 1, b.falloff);
+            ob.damage(dmg * b.gunDef.bullet.obstacleDamage);
+            b.alive = false;
+            b.collided = true;
+            continue;
+          }
         }
         if (pan && (!hit || panD < hitT * step)) {
           b.traveled += step;

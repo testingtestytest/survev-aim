@@ -20,11 +20,13 @@
   //             it charges you with melee when you're close, gunSense: chance it acts on the right gun for
   //             the range (shotgun close, the other gun far)
   //  Reloading  reloadTo: share of a shell-by-shell gun's mag it loads before firing again
+  //  Obstacles  replan: seconds between path updates, seekAfter: seconds without seeing you before it goes
+  //             looking, losCare: chance it holds fire instead of shooting an obstacle in the way
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34 },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45 },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55 },
-    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67 },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4 },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7 },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95 },
+    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1 },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -47,6 +49,13 @@
   const CHARGE_TIME = [1.2, 2.2];     // s before it gives up a charge
   const CHARGE_LOW_HP = 4;            // extra charge rate at 0 health, fading to none at full health
   const RELOAD_INTERRUPT = 6;         // closer than this it fires whatever it has loaded, mid-reload or not
+  // Finding a way around obstacles.
+  const NAV_CLEAR = 0.45;             // units it tries to leave between itself and an obstacle
+  const NAV_LOOK = 2.5;               // how far ahead it checks a direction before choosing it
+  const NAV_TURN = 1.2;               // how close an obstacle gets before it turns away mid-run
+  const WAYPOINT_REACHED = 0.8;
+  const STUCK_TIME = 0.35;            // s of barely moving before it tries something else
+  const STUCK_SHARE = 0.3;            // "barely moving": less than this share of its speed
   // Which gun suits the range.
   const SHOTGUN_NEAR = 10;            // closer than this it wants the shotgun
   const SHOTGUN_FAR = 14;             // further than this it wants the other gun
@@ -114,6 +123,13 @@
       this.heldForFight = false;
       this.senseT = 0;
       this.charges = 0;                   // stats, used by the tests
+      this.path = null;                   // waypoints around obstacles
+      this.pathI = 0;
+      this.planT = 0;
+      this.noSightT = 0;                  // how long an obstacle has been between you
+      this.sightBlocked = false;
+      this.shootBlind = false;
+      this.stuckT = 0;
     }
 
     nextRush() { const g = RUSH_GAP[this.o.rush]; return g ? rand(g[0], g[1]) : Infinity; }
@@ -179,17 +195,23 @@
       else { want = 0; tol = this.S.tol; }   // in range: strafe across the line of fire
       const cands = [];
       DIRS.forEach((v, k) => {
-        if (k === this.dirIdx || this.leavesScreen(v)) return;
+        if (k === this.dirIdx || this.leavesScreen(v) || this.runsIntoObstacle(v)) return;
         const r = v.x * away.x + v.y * away.y;
         if (Math.abs(r - want) < tol) cands.push(k);
       });
       if (cands.length) this.dirIdx = cands[Math.floor(Math.random() * cands.length)];
       else if (this.dynamic && this.mode === 'hold') {
         // boxed in by the screen edge: slide along it, or come back toward you if there's no way along
-        const free = DIRS.map((v, k) => k).filter((k) => !this.leavesScreen(DIRS[k]));
+        const free = DIRS.map((v, k) => k).filter((k) => !this.leavesScreen(DIRS[k]) && !this.runsIntoObstacle(DIRS[k]));
         const score = (k) => -Math.abs(DIRS[k].x * away.x + DIRS[k].y * away.y - want);
         this.dirIdx = free.reduce((a, k) => (a < 0 || score(k) > score(a) ? k : a), -1);
-      } else this.dirIdx = Math.floor(Math.random() * 8);
+      } else {
+        this.dirIdx = Math.floor(Math.random() * 8);
+        if (this.runsIntoObstacle(DIRS[this.dirIdx])) {
+          const free = DIRS.map((v, k) => k).filter((k) => !this.runsIntoObstacle(DIRS[k]));
+          if (free.length) this.dirIdx = free[Math.floor(Math.random() * free.length)];
+        }
+      }
     }
 
     fightMelee() { return this.charge || this.closeFightT > 0; }
@@ -318,6 +340,44 @@
       }
     }
 
+    runsIntoObstacle(v, look = NAV_LOOK) {
+      const f = this.p.world && this.p.world.field;
+      return !!f && f.ahead(this.p.pos, v, look, this.p.rad);
+    }
+
+    // Can it see you past the obstacles? When it loses sight of you, it decides whether to hold fire.
+    checkSight(dt) {
+      const f = this.p.world && this.p.world.field;
+      if (!f) return;
+      const blocked = f.blocked(this.p.pos, this.t.pos);
+      if (blocked && !this.sightBlocked) this.shootBlind = Math.random() > this.S.losCare;
+      this.sightBlocked = blocked;
+      this.noSightT = blocked ? this.noSightT + dt : 0;
+    }
+
+    // Walks a path around obstacles when one is in the way of getting to you, or when it's lost sight of you
+    // for long enough. Otherwise normal movement carries on. True while it's following a path.
+    navigate(dist, dt) {
+      const p = this.p, t = this.t, f = p.world && p.world.field;
+      if (!f || this.o.still) return false;
+      const closing = this.mode === 'rush' || dist > this.range()[1];
+      const seeking = this.noSightT > this.S.seekAfter;
+      if (!(closing || seeking) || !f.blocked(p.pos, t.pos, p.rad + NAV_CLEAR)) { this.path = null; return false; }
+      if ((this.planT -= dt) <= 0 || !this.path) {
+        this.planT = this.S.replan;
+        this.path = f.findPath(p.pos, t.pos, p.rad, NAV_CLEAR);
+        this.pathI = 0;
+      }
+      if (!this.path) return false;
+      while (this.pathI < this.path.length && Math.hypot(this.path[this.pathI].x - p.pos.x, this.path[this.pathI].y - p.pos.y) < WAYPOINT_REACHED) this.pathI++;
+      if (this.pathI >= this.path.length) { this.path = null; return false; }
+      const w = this.path[this.pathI], dx = w.x - p.pos.x, dy = w.y - p.pos.y, d = Math.hypot(dx, dy) || 1;
+      let best = 0, bestDot = -2;
+      DIRS.forEach((v, k) => { const q = (v.x * dx + v.y * dy) / d; if (q > bestDot) { bestDot = q; best = k; } });
+      this.dirIdx = best;
+      return true;
+    }
+
     // Long runs can overshoot a narrow band or the screen edge, so a dynamic bot turns early.
     offCourse(dist) {
       // In a melee fight, turn back as soon as it's moving out of reach.
@@ -404,7 +464,17 @@
       this.dodgeT -= dt;
       this.checkDodge(dt);
       if (this.offCourse(dist)) this.dirT = 0;
+      this.checkSight(dt);
+      const onPath = this.dodgeT <= 0 && this.navigate(dist, dt);
+      if (!onPath && p.world && p.world.field && this.dirIdx >= 0 && this.dodgeT <= 0) {
+        // turn before walking into something, and try another way if it's not getting anywhere
+        if (this.runsIntoObstacle(DIRS[this.dirIdx], NAV_TURN)) this.dirT = 0;
+        const moved = Math.hypot(p.pos.x - p.posOld.x, p.pos.y - p.posOld.y) / dt;
+        this.stuckT = moved < p.calcSpeed() * STUCK_SHARE ? this.stuckT + dt : 0;
+        if (this.stuckT > STUCK_TIME) { this.stuckT = 0; this.dirT = 0; this.path = null; }
+      }
       if (this.o.still) { this.dirIdx = -1; }
+      else if (onPath) { /* the path sets its direction */ }
       else if ((this.dirT -= dt) <= 0) {
         if (this.mode !== 'rush' && Math.random() < S.stop) { this.dirIdx = -1; this.dirT = rand(0.15, 0.35); }
         else {
@@ -459,7 +529,8 @@
         const isAuto = d.kind === 'gun' && (d.fireMode === 'auto' || d.fireMode === 'burst');
         const ammo = p.slots[p.cur].ammo;
         const midReload = d.kind === 'gun' && (p.action || p.reloadAgain || this.reloadSlot === p.cur) && ammo < this.enoughAmmo(d) && dist >= RELOAD_INTERRUPT;
-        const hasAmmo = d.kind !== 'gun' || (ammo > 0 && !midReload);
+        const holdFire = this.sightBlocked && !this.shootBlind;      // don't waste shots on a tree in the way
+        const hasAmmo = d.kind !== 'gun' || (ammo > 0 && !midReload && !holdFire);
         // Automatic guns are mostly mag dumped: once it starts, it keeps the trigger held until the
         // mag is empty, you're out of range or its aim is way off. Sometimes it's just a short burst.
         if (this.spraying) {
