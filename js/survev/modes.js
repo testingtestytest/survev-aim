@@ -326,6 +326,7 @@
       me.cancelAction(); me.scheduledReload = false;
     }
     const botEvents = {
+      reflect() { st.botReflects = (st.botReflects || 0) + 1; },
       hit(p, target, res) {
         if (target !== p) { st.taken += res.dealt; return; }
         // The bot's own shot, sent back by your pan: that damage is yours.
@@ -338,7 +339,7 @@
     const me = world.addPlayer(0, 0, { id: 'me', helmet: cfg.myHelmet || 0, chest: cfg.myVest || 0, boost: cfg.myBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: meEvents });
     SV.preload(C.armor.chestSkin.concat(C.armor.helmetSkin).filter(Boolean).flatMap((a) => [a.sprite, a.loot]));
     me.setLoadout(cfg.primary || '', cfg.secondary || '', cfg.melee || 'fists');
-    const preload = [me.slots[0].type, me.slots[1].type, me.slots[2].type, ...BOT_GUNS].map(SV.defOf).filter(Boolean);
+    const preload = [me.slots[0].type, me.slots[1].type, me.slots[2].type, cfg.botMelee, ...BOT_GUNS].map(SV.defOf).filter(Boolean);
     SV.preload(['player-base-01', 'player-hands-01', 'player-bullet-trail-02', ...preload.flatMap((d) => [d.loot, d.world && d.world.sprite, d.world && d.world.magImg && d.world.magImg.sprite])]);
 
     // Anywhere you can currently see, so a bigger scope means a wider spread. Measured in pixels so it
@@ -364,7 +365,7 @@
       bot = world.addPlayer(me.pos.x + at.x, me.pos.y + at.y,
         { id: 'bot', helmet: cfg.botHelmet || 0, chest: cfg.botVest || 0, boost: cfg.botBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: botEvents });
       const fire = kind === '1v1';
-      bot.setLoadout(fire ? cfg.botGun : '', fire ? cfg.botGun2 || '' : '', 'fists');
+      bot.setLoadout(fire ? cfg.botGun : '', fire ? cfg.botGun2 || '' : '', (fire && cfg.botMelee) || 'fists');
       ai = new SV.Bot(bot, me, botOpts(cfg, kind === '1v1', () => {
         const { W, H } = api.size, ppu = viewPpu(W, H, zoom);
         return { hw: W / 2 / ppu - SCREEN_MARGIN, hh: H / 2 / ppu - SCREEN_MARGIN };
@@ -468,6 +469,7 @@
           ['FREE SWITCHES', AT.pct(st.free, st.switches)],
           ['AVG TIME BETWEEN SHOTS', st.gaps.length ? avg(st.gaps).toFixed(2) + 'S' : '—'],
         ];
+        if (kind === '1v1' && cfg.botMelee === 'pan') rows.push(['BOT DEFLECTED', st.botReflects || 0]);
         if (kind === '1v1') rows.push(['DEATHS', st.deaths], ['DAMAGE TAKEN', Math.round(st.taken)]);
         if (me.slots[2].type === 'pan') rows.push(['SHOTS REFLECTED', st.reflects]);
         Object.entries(st.byWeapon).forEach(([n, w]) => rows.push([n.toUpperCase() + ' HITS', `${w.hits}/${w.shots}`]));
@@ -518,7 +520,7 @@
     group: 'survev',
     name: '1V1',
     description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee, and it fights back.',
-    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'obstacles', 'scope', 'duration'],
+    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'obstacles', 'scope', 'duration'],
     settings: [
       ...loadout(),
       botRange,
@@ -532,6 +534,7 @@
       ...adrenaline(),
       { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'ak47', only: BOT_GUNS },
       { key: 'botGun2', label: 'BOT SECOND WEAPON', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true, only: BOT_GUNS },
+      { key: 'botMelee', label: 'BOT MELEE', type: 'weapon', pick: 'melee', default: 'fists' },
       { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
         preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },

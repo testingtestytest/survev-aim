@@ -20,13 +20,15 @@
   //             it charges you with melee when you're close, gunSense: chance it acts on the right gun for
   //             the range (shotgun close, the other gun far)
   //  Reloading  reloadTo: share of a shell-by-shell gun's mag it loads before firing again
+  //  Pan        panCare: chance it turns the pan toward you in a gap between shots, panErr: how far off it
+  //             lands in degrees (std dev)
   //  Obstacles  replan: seconds between path updates, seekAfter: seconds without seeing you before it goes
   //             looking, losCare: chance it holds fire instead of shooting an obstacle in the way
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4 },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7 },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95 },
-    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1 },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25 },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14 },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7 },
+    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3 },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -38,17 +40,25 @@
   const CARE_SLACK = 0.2;             // s a careful bot will give up to alternate guns instead of refiring
   const ERR_CHANGE = [0.15, 0.35];    // s between changes of where its hand error is heading
   const ERR_SMOOTH = 10;              // how quickly its aim follows that change, per second
-  // Melee, in units from you. Fists reach about 3.25.
-  const MELEE_CLOSE = 3.5;            // "super close": it may go to melee
-  const MELEE_GIVE_UP = 5.5;          // you got away from a close-up fight
-  const MELEE_REROLL = 6;             // beyond this it rolls again as soon as you're super close
+  // Melee distances follow the weapon's reach: its hit offset + hit radius + your radius (3.25 for fists).
+  const MELEE_CLOSE = 0.25;           // "super close": within this much beyond its reach, it may go to melee
+  const MELEE_SWING = 0.25;           // swings once you're this far inside its reach
+  const MELEE_GIVE_UP = 2.25;         // you got away from a close-up fight, this far beyond its reach
+  const MELEE_REROLL = 2.75;          // beyond this it rolls again as soon as you're super close
   const MELEE_FIGHT = [1.5, 3];       // s a close-up fight lasts
   const MELEE_RETRY = 1.5;            // s before it decides again if you stay super close
-  const MELEE_BAND = [1.4, 2.6];      // the distance it keeps while fighting with melee
-  const CHARGE_DIST = 10;             // you're close enough to charge
+  const MELEE_BAND_MIN = 1.4;         // closest it gets while fighting with melee
+  const MELEE_BAND_IN = 0.65;         // furthest it stays while fighting: this far inside its reach
+  const MELEE_BAND_WIDTH = 1.55;      // a long weapon keeps you at the end of it: closest is this far inside that
+  const CHARGE_DIST = 10;             // you're close enough for fists to charge
+  const CHARGE_PER_REACH = 1.5;       // each unit of extra reach adds this much
+  const FISTS_REACH = 3.25;
   const CHARGE_TIME = [1.2, 2.2];     // s before it gives up a charge
   const CHARGE_LOW_HP = 4;            // extra charge rate at 0 health, fading to none at full health
   const RELOAD_INTERRUPT = 6;         // closer than this it fires whatever it has loaded, mid-reload or not
+  // Turning the pan toward you while it can't shoot.
+  const PAN_TURN = 3;                 // turning takes about this many "track" time constants
+  const PAN_MIN_GAP = 0.15;           // s it must be able to hold the pan there, on top of turning both ways
   // Finding a way around obstacles.
   const NAV_CLEAR = 0.45;             // units it tries to leave between itself and an obstacle
   const NAV_LOOK = 2.5;               // how far ahead it checks a direction before choosing it
@@ -123,6 +133,9 @@
       this.heldForFight = false;
       this.senseT = 0;
       this.charges = 0;                   // stats, used by the tests
+      this.panCovering = false;
+      this.panRolled = false;
+      this.panOff = 0;
       this.path = null;                   // waypoints around obstacles
       this.pathI = 0;
       this.planT = 0;
@@ -136,7 +149,7 @@
 
     // The distances it's happy at right now, as [closest, furthest].
     range() {
-      if (this.p.cur === 2 && this.fightMelee()) return MELEE_BAND;
+      if (this.p.cur === 2 && this.fightMelee()) return this.meleeBand();
       if (this.mode === 'hold' && this.dynamic) return [this.goal - this.slack, this.goal + this.slack];
       const D = this.mode === 'hold' ? this.o.distance : 2.6;
       return [D * 0.75 - 0.5, D * 1.25 + 1];
@@ -216,6 +229,48 @@
 
     fightMelee() { return this.charge || this.closeFightT > 0; }
 
+    meleeReach() {
+      const d = SV.defOf(this.p.slots[2].type);
+      return d ? Math.hypot(d.attack.offset.x, d.attack.offset.y) + d.attack.rad + this.t.rad : FISTS_REACH;
+    }
+
+    meleeBand() {
+      const far = this.meleeReach() - MELEE_BAND_IN;
+      return [Math.max(MELEE_BAND_MIN, far - MELEE_BAND_WIDTH), far];
+    }
+
+    // How long until the gun it's holding, or going back to, can fire.
+    timeToFire() {
+      const p = this.p, slot = p.cur === 2 ? p.lastGun : p.cur, w = p.slots[slot], d = SV.defOf(w.type);
+      if (!d || d.kind !== 'gun') return 0;
+      if (p.action && slot === p.cur) {
+        const shells = d.maxReload < d.maxClip && p.action.type !== 'alt' ? Math.max(1, this.enoughAmmo(d) - w.ammo) : 1;
+        return p.action.duration * shells - p.action.time;
+      }
+      return Math.max(0, w.cooldown);
+    }
+
+    // With a pan on its back, or in its hand between shots, it can turn it toward you while it can't shoot.
+    // It decides once per gap, and turns back in time for the next shot. Returns how far to turn from
+    // facing you (radians), or null. player.panSegmentAt: a point at local (x, y) sits at atan2(-y, x) from facing.
+    panCover(dist) {
+      const p = this.p, S = this.S;
+      if (p.slots[2].type !== 'pan') return null;
+      const turn = PAN_TURN / S.track, wait = this.timeToFire();
+      if (wait < turn || dist < this.meleeReach() + MELEE_CLOSE || this.sightBlocked || (p.cur === 2 && this.fightMelee())) {
+        this.panCovering = this.panRolled = false;
+        return null;
+      }
+      if (!this.panRolled && wait > 2 * turn + PAN_MIN_GAP) {
+        this.panRolled = true;
+        this.panCovering = Math.random() < S.panCare;
+        this.panOff = (gauss() * S.panErr * Math.PI) / 180;
+      }
+      if (!this.panCovering) return null;
+      const s = SV.MELEE.pan.reflectSurface[p.wearingPan ? 'unequipped' : 'equipped'];
+      return -Math.atan2(-(s.p0.y + s.p1.y) / 2, (s.p0.x + s.p1.x) / 2) + this.panOff;
+    }
+
     // Shots a gun needs before the bot stops reloading it. A shell-by-shell gun would otherwise fire
     // the first shell in, which cancels the reload and leaves it on an almost empty gun.
     enoughAmmo(d) { return d.maxReload >= d.maxClip ? d.maxClip : Math.ceil(d.maxClip * this.S.reloadTo); }
@@ -227,15 +282,16 @@
       if (!p.slots[2].type) return;
       this.closeFightT -= dt;
       this.closeNext -= dt;
-      if (dist > MELEE_GIVE_UP) this.closeFightT = 0;
-      if (dist > MELEE_REROLL) this.closeNext = 0;
-      if (dist < MELEE_CLOSE && this.closeNext <= 0 && !this.charge) {
+      const reach = this.meleeReach(), close = reach + MELEE_CLOSE;
+      if (dist > reach + MELEE_GIVE_UP) this.closeFightT = 0;
+      if (dist > reach + MELEE_REROLL) this.closeNext = 0;
+      if (dist < close && this.closeNext <= 0 && !this.charge) {
         const go = Math.random() < S.closeMelee;
         this.closeFightT = go ? rand(MELEE_FIGHT[0], MELEE_FIGHT[1]) : 0;
         this.closeNext = this.closeFightT + MELEE_RETRY;
         if (go) this.meleeIn = rand(S.qsDelay[0], S.qsDelay[1]);
       }
-      if (this.mode === 'hold' && this.o.rush !== 'never' && dist >= MELEE_CLOSE && dist < CHARGE_DIST) {
+      if (this.mode === 'hold' && this.o.rush !== 'never' && dist >= close && dist < CHARGE_DIST + (reach - FISTS_REACH) * CHARGE_PER_REACH) {
         const hurt = 1 - Math.max(0, p.health) / C.player.health;
         if (Math.random() < S.charge * (1 + CHARGE_LOW_HP * hurt) * dt) {
           this.charge = true; this.charges++;
@@ -381,7 +437,7 @@
     // Long runs can overshoot a narrow band or the screen edge, so a dynamic bot turns early.
     offCourse(dist) {
       // In a melee fight, turn back as soon as it's moving out of reach.
-      if (this.p.cur === 2 && this.fightMelee() && this.dirIdx >= 0 && dist > MELEE_BAND[1]) {
+      if (this.p.cur === 2 && this.fightMelee() && this.dirIdx >= 0 && dist > this.meleeBand()[1]) {
         const m = DIRS[this.dirIdx];
         return (m.x * (this.p.pos.x - this.t.pos.x) + m.y * (this.p.pos.y - this.t.pos.y)) / dist > -0.3;
       }
@@ -446,7 +502,7 @@
         this.modeT = rand(RUSH_GIVE_UP[0], RUSH_GIVE_UP[1]) + Math.max(0, dist - RUSH_GIVE_UP_DIST) / RUSH_APPROACH_SPEED;
       }
       if (this.mode === 'rush') {
-        if (dist < 3) { this.mode = 'brawl'; this.modeT = rand(1.2, 2.5); this.dirT = 0; }
+        if (dist < this.meleeReach() - MELEE_SWING) { this.mode = 'brawl'; this.modeT = rand(1.2, 2.5); this.dirT = 0; }
         else if ((this.modeT -= dt) <= 0) this.endFight();   // you got away
       }
       if (this.mode === 'brawl' && (this.modeT -= dt) <= 0) this.endFight();
@@ -509,7 +565,9 @@
         ax = t.pos.x + this.vEst.x * tt * this.lead;
         ay = t.pos.y + this.vEst.y * tt * this.lead;
       }
-      const want = Math.atan2(ay - p.pos.y, ax - p.pos.x);
+      let want = Math.atan2(ay - p.pos.y, ax - p.pos.x);
+      const cover = this.o.fire ? this.panCover(dist) : null;
+      if (cover != null) { want += cover; this.spraying = false; }
       let diff = want - this.aimAng;
       while (diff > Math.PI) diff -= 2 * Math.PI;
       while (diff < -Math.PI) diff += 2 * Math.PI;
@@ -524,7 +582,7 @@
       // ---- shooting ----
       i.shootHold = false;
       if (this.o.fire && !t.dead) {
-        const inRange = d.kind === 'gun' ? dist < d.bullet.distance * 0.9 : dist < 3;
+        const inRange = d.kind === 'gun' ? dist < d.bullet.distance * 0.9 : dist < this.meleeReach() - MELEE_SWING;
         const onTarget = Math.abs(diff) < Math.max(0.05, Math.atan2(t.rad * 1.5, dist));
         const isAuto = d.kind === 'gun' && (d.fireMode === 'auto' || d.fireMode === 'burst');
         const ammo = p.slots[p.cur].ammo;

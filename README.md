@@ -27,7 +27,9 @@ In 1v1 the bot carries an **AK-47 and Mosin** by default. You can change either,
 
 With rocks and trees on, the bot finds its way around them with A* pathfinding, using the same 8 directions as a player's keys. It paths to you when it's closing in, or when it has lost sight of you for a while. It avoids obstacles while strafing, and it holds fire instead of shooting one in the way. Skill sets how quickly it updates its path, how soon it comes looking for you, and how well it holds fire. The pathfinding is this trainer's own design; the game has no bots like this.
 
-The bot can also fight with **melee** (fists). When you're super close it may switch to melee, and when you're within 10 units it sometimes charges you with melee. Charges get up to 5 times more likely as its health runs out, and a bot set to never rush doesn't charge. Skill sets how likely both are.
+With a **pan** as its melee, the bot uses it when it can't shoot, such as during a reload or a switch delay. It turns the pan on its back toward you to deflect your shots, then turns back in time to fire. If it's holding the pan, it does the same with the one in its hand. Skill sets how often it does this and how accurately. The results screen counts what it deflected.
+
+The bot can also fight with **melee**, fists by default, and you can choose its weapon with **BOT MELEE**. The weapon's reach sets when it attacks: it switches and swings from further away with a Naginata (reach 6.5) than with fists (3.25), and stays toward the end of a long weapon's reach. When you're super close it may switch to melee, and when you're within about 10 units (more with a long weapon) it sometimes charges you with melee. Charges get up to 5 times more likely as its health runs out, and a bot set to never rush doesn't charge. Skill sets how likely both are.
 
 With one gun, a bot on a slow single-shot gun such as a sniper can pull out melee between shots. Any switch clears the post-shot slowdown, so it strafes at full speed and still fires as often. Skill sets how often it does this.
 
