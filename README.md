@@ -99,7 +99,7 @@ Survev modes open in **SIMPLE** settings with just the essentials. **FULL** show
 Survev modes play the game's own sound effects, by the rules in survev's `client/src/audioManager.ts` and `client/src/lib/createJS.ts`: shots, bolts and pumps, reloads, weapon swaps, melee swings and hits, bullet hits, pan deflections, rock and tree hits and breaks, footsteps, and bullets passing close. Sounds fade with distance over the game's 48 units and sit in the ear they came from. Each round only loads the sounds its weapons need. **SOUND VOLUME** is under **KEYBINDS AND SETTINGS**. Standard modes are silent.
 
 ## Grenades
-Frag grenades work as they do in the game, ported from survev's `weaponManager.ts`, `projectile.ts` and `explosion.ts`. **YOUR GRENADES** and **BOT GRENADES** turn them on, and both are on by default in 1v1. Quickswitch has **YOUR GRENADES**, off by default. You get 3, and a kill recharges them to 3.
+Frag grenades work as they do in the game, ported from survev's `weaponManager.ts`, `projectile.ts` and `explosion.ts`. **YOUR GRENADES** and **BOT GRENADES** turn them on or off, and both are on by default in 1v1. Quickswitch has **YOUR GRENADES**, also on by default. You get 3, and a kill recharges them to 3.
 
 Press **4** to equip one, or scroll to it, then hold the fire button to cook it and let go to throw it.
 - **Fuse:** 4 seconds, counting from when you pull the pin. Cook it too long and it goes off in your hand. Swapping weapons while cooking drops it at your feet, unless you've held it for under 0.1s, which just cancels it.

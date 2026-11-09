@@ -607,7 +607,7 @@
       obstaclesSetting,
       scope,
       infAmmo,
-      { ...myNadesSetting, default: 'off' },
+      myNadesSetting,
       popups,
       { key: 'duration', label: 'DURATION', default: 60, preview: AT.pv.duration,
         options: [30, 60, 120].map((v) => ({ v, label: v + 'S' })) },
