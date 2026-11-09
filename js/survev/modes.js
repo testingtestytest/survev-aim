@@ -249,6 +249,11 @@
     options: [{ v: 'off', label: 'OFF' }, { v: 'few', label: 'FEW' }, { v: 'normal', label: 'NORMAL' }, { v: 'many', label: 'MANY' }] };
   const scope = { key: 'scope', label: 'SCOPE', default: '1xscope', preview: pvView,
     options: SCOPES.map((v) => ({ v, label: v.replace('scope', '').toUpperCase() + ` (${RADII[v]})` })) };
+  const NADE_COUNT = 3;
+  const nadeOptions = [{ v: 'on', label: 'ON' }, { v: 'off', label: 'OFF' }];
+  const nadeText = (who) => pvText((p) => (p.v === 'on' ? [`${who} ${NADE_COUNT} FRAG GRENADES`, 'THEY RECHARGE AFTER A KILL.', 'HOLD TO COOK, 4S FUSE.'] : ['NO GRENADES'])) ;
+  const myNadesSetting = { key: 'myNades', label: 'YOUR GRENADES', default: 'on', preview: nadeText('YOU GET'), options: nadeOptions };
+  const botNadesSetting = { key: 'botNades', label: 'BOT GRENADES', default: 'on', preview: nadeText('IT GETS'), options: nadeOptions };
   const infAmmo = { key: 'infAmmo', label: 'INFINITE BULLETS', default: 'off',
     preview: pvText((p) => (p.v === 'off' ? ['OFF', 'MAGS RUN OUT AND RELOAD', 'LIKE THE REAL GAME.'] : ['TRAINING AID', 'GUNS NEVER NEED A RELOAD', p.v === 'both' ? 'FOR YOU AND THE BOT.' : 'FOR YOU ONLY.'])),
     options: [{ v: 'off', label: 'OFF' }, { v: 'you', label: 'YOU' }, { v: 'both', label: 'YOU AND BOT' }] };
@@ -281,7 +286,8 @@
     const popupsArr = [];
     const st = { shots: 0, hits: 0, heads: 0, dmg: 0, kills: 0, ttk: [], switches: 0, free: 0, deaths: 0, taken: 0, reflects: 0,
       lastShot: [null, null, null], gaps: [], byWeapon: {} };
-    const keyLabels = () => [AT.bindLabel('primary'), AT.bindLabel('secondary'), AT.bindLabel('melee')];
+    const keyLabels = () => [AT.bindLabel('primary'), AT.bindLabel('secondary'), AT.bindLabel('melee'), AT.bindLabel('grenade')];
+    const myNades = cfg.myNades === 'on' ? NADE_COUNT : 0, botNades = kind === '1v1' && cfg.botNades === 'on' ? NADE_COUNT : 0;
     let bot = null, ai = null, botSpawn = 0, respawnT = -1, lastShotT = null, lastHitShot = null;
 
     const meEvents = {
@@ -306,9 +312,11 @@
         lastHitShot = shotId;
         st.dmg += res.dealt;
         if (res.head) st.heads++;
-        const w = (st.byWeapon[d.name] = st.byWeapon[d.name] || { shots: 0, hits: 0, dmg: 0 });
-        w.dmg += res.dealt;
-        if (!sameShot) {
+        // A grenade isn't a shot you aimed, so it doesn't count toward accuracy.
+        const aimed = d.kind === 'gun' || d.kind === 'melee';
+        if (aimed) (st.byWeapon[d.name] = st.byWeapon[d.name] || { shots: 0, hits: 0, dmg: 0 }).dmg += res.dealt;
+        const w = st.byWeapon[d.name];
+        if (!sameShot && aimed) {
           st.hits++; w.hits++;
           for (let i = timeline.length - 1; i >= 0; i--) if (timeline[i].type === 'shot' && !timeline[i].hit) { timeline[i].hit = true; break; }
         }
@@ -334,6 +342,7 @@
       st.kills++; st.ttk.push(world.time - botSpawn); respawnT = 0.6;
       // training reward: full health and full reload on kill
       me.health = C.player.health;
+      if (myNades) me.setGrenades(myNades);    // a kill recharges your grenades
       me.slots.forEach((s) => { const sd = SV.defOf(s.type); if (sd && sd.kind === 'gun') s.ammo = sd.maxClip; });
       me.cancelAction(); me.scheduledReload = false;
     }
@@ -352,7 +361,10 @@
     world.audio = SV.Audio.begin(me, [cfg.primary, cfg.secondary, cfg.melee || 'fists', ...(kind === '1v1' ? [cfg.botGun, cfg.botGun2, cfg.botMelee] : ['fists'])]);
     SV.preload(C.armor.chestSkin.concat(C.armor.helmetSkin).filter(Boolean).flatMap((a) => [a.sprite, a.loot]));
     me.setLoadout(cfg.primary || '', cfg.secondary || '', cfg.melee || 'fists');
+    me.setGrenades(myNades);
     const preload = [me.slots[0].type, me.slots[1].type, me.slots[2].type, cfg.botMelee, ...BOT_GUNS].map(SV.defOf).filter(Boolean);
+    const F = SV.FRAG;
+    SV.preload([F.loot, F.worldImg.sprite, F.burst.image, F.decal.sprite, ...Object.values(F.handImg).flatMap((h) => [h.left && h.left.sprite, h.right && h.right.sprite])]);
     SV.preload(['player-base-01', 'player-hands-01', 'player-bullet-trail-02', ...preload.flatMap((d) => [d.loot, d.world && d.world.sprite, d.world && d.world.magImg && d.world.magImg.sprite])]);
 
     // Anywhere you can currently see, so a bigger scope means a wider spread. Measured in pixels so it
@@ -379,6 +391,7 @@
         { id: 'bot', helmet: cfg.botHelmet || 0, chest: cfg.botVest || 0, boost: cfg.botBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: botEvents, infiniteAmmo: cfg.infAmmo === 'both' });
       const fire = kind === '1v1';
       bot.setLoadout(fire ? cfg.botGun : '', fire ? cfg.botGun2 || '' : '', (fire && cfg.botMelee) || 'fists');
+      bot.setGrenades(botNades);
       ai = new SV.Bot(bot, me, botOpts(cfg, kind === '1v1', () => {
         const { W, H } = api.size, ppu = viewPpu(W, H, zoom);
         return { hw: W / 2 / ppu - SCREEN_MARGIN, hh: H / 2 / ppu - SCREEN_MARGIN };
@@ -397,6 +410,7 @@
       const { W, H } = api.size;
       const dx = api.mouse.x - W / 2, dy = api.mouse.y - H / 2, l = Math.hypot(dx, dy);
       if (l > 0.5) me.dir = { x: dx / l, y: dy / l };
+      me.toMouseLen = l / viewPpu(W, H, shownZoom);
     }
 
     // Touch input, in the order of survev's game.ts. shootStart stays set while firing, as it does there.
@@ -407,6 +421,8 @@
       const r = touch.update(STEP, W, H);
       me.input.moveDir = r.move;
       me.dir = r.aim;
+      // game.ts: how far the aim stick is pushed. Lifting your thumb to throw leaves it where it was.
+      if (r.aimLen > 0) me.toMouseLen = Math.min(1, r.aimLen) * C.player.throwableMaxMouseDist;
       me.input.shootHold = r.shoot;
       if (r.shoot) me.input.shootStart = true;
     }
@@ -419,7 +435,7 @@
       touchPress(x, y) {
         const { W, H } = api.size;
         if (this.scopeClick(x, y)) return true;
-        const b = SV.touchButton(W, H, x, y, me.activeDef.kind === 'gun');
+        const b = SV.touchButton(W, H, x, y, me.activeDef.kind === 'gun', me.nades > 0);
         if (b === null) return false;
         if (b === 'reload') me.requestReload(); else me.switchTo(b);
         return true;
@@ -447,6 +463,8 @@
           if (me.dead) {
             st.deaths++;
             me.dead = false; me.health = C.player.health; me.boost = cfg.myBoost || 0;
+            me.setGrenades(myNades);           // a new life, and a kill for the bot: both have their grenades again
+            if (bot && !bot.dead) bot.setGrenades(botNades);
             api.loseLife();
           }
         }
@@ -460,6 +478,7 @@
         if (a === 'primary') me.switchTo(0);
         else if (a === 'secondary') me.switchTo(1);
         else if (a === 'melee') me.switchTo(2);
+        else if (a === 'grenade') me.switchTo(3);
         else if (a === 'swap') me.swapKey();
         else if (a === 'reload') me.requestReload();
         else if (a === 'nextScope') stepScope(1);
@@ -524,9 +543,10 @@
     group: 'survev',
     name: '1V1',
     description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee, and it fights back.',
-    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'obstacles', 'scope', 'duration'],
+    simple: ['primary', 'secondary', 'melee', 'myNades', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'botNades', 'obstacles', 'scope', 'duration'],
     settings: [
       ...loadout(),
+      myNadesSetting,
       botRange,
       { key: 'rush', label: 'RUSHES', default: 'sometimes', preview: pvBot,
         options: [{ v: 'never', label: 'NEVER' }, { v: 'sometimes', label: 'SOMETIMES' }, { v: 'often', label: 'OFTEN' }] },
@@ -539,6 +559,7 @@
       { key: 'botGun', label: 'BOT WEAPON', type: 'weapon', pick: 'gun', default: 'ak47', only: BOT_GUNS },
       { key: 'botGun2', label: 'BOT SECOND WEAPON', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true, only: BOT_GUNS },
       { key: 'botMelee', label: 'BOT MELEE', type: 'weapon', pick: 'melee', default: 'pan' },
+      botNadesSetting,
       { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
         preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
@@ -571,6 +592,7 @@
       obstaclesSetting,
       scope,
       infAmmo,
+      { ...myNadesSetting, default: 'off' },
       popups,
       { key: 'duration', label: 'DURATION', default: 60, preview: AT.pv.duration,
         options: [30, 60, 120].map((v) => ({ v, label: v + 'S' })) },

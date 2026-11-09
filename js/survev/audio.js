@@ -6,6 +6,7 @@
   const MIN_VOLUME = 0.003;         // AudioManagerMinAllowedVolume: anything quieter isn't played
   const COALESCE_TIME = 0.03;       // createJS kCoalesceTime
   const ALWAYS = ['gun_switch_01', 'footstep_grass', 'player_bullet_hit', 'bullet_whiz',
+    SV.FRAG.explosion.sound, SV.FRAG.ground, ...Object.values(SV.FRAG.sound),
     ...Object.values(SV.OBSTACLE_DEFS).flatMap((o) => [o.sound.bullet, o.sound.punch, o.sound.explode])];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -66,15 +67,16 @@
       return Audio;
     },
     // audioManager.playSound. Returns something to stop it with, or null if nothing started.
-    play(name, channel, pos, fallOff = 0) {
+    play(name, channel, pos, fallOff = 0, rangeMult = 1) {
       const buf = buffers[name], ch = S.channels[channel];
       if (!buf || !ctx || ctx.state !== 'running' || AT.prefs.volume <= 0) return null;
       let volume = ch.volume * BASE_VOLUME, pan = 0;
       if (channel !== 'activePlayer' && pos && Audio.me) {
         const dx = Audio.me.pos.x - pos.x, dy = Audio.me.pos.y - pos.y;
-        volume *= (1 - clamp(Math.hypot(dx, dy) / ch.maxRange, 0, 1)) ** (1 + fallOff * 2);
+        const range = ch.maxRange * rangeMult;
+        volume *= (1 - clamp(Math.hypot(dx, dy) / range, 0, 1)) ** (1 + fallOff * 2);
         if (volume <= MIN_VOLUME) return null;
-        pan = clamp(-dx / ch.maxRange, -1, 1);
+        pan = clamp(-dx / range, -1, 1);
       }
       const file = S.files[name];
       volume *= file.volume;

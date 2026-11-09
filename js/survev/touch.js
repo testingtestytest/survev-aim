@@ -119,7 +119,7 @@
       }
       if (touched) this.turnDirTicker = TURN_COOLDOWN;
       const moving = this.moveDetected && Math.round(clamp(this.analog.len, 0, 1) * 255) > 0;
-      return { move: moving ? moveDir : null, aim: aimDir, shoot: this.shotDetected };
+      return { move: moving ? moveDir : null, aim: aimDir, shoot: this.shotDetected, aimLen: this.aim.len / this.range };
     }
 
     drawPads(g) {

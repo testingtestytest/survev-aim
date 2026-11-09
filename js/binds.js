@@ -8,6 +8,7 @@
     { id: 'primary', label: 'PRIMARY', def: ['Digit1'] },
     { id: 'secondary', label: 'SECONDARY', def: ['Digit2'] },
     { id: 'melee', label: 'MELEE', def: ['Digit3', 'KeyE'] },
+    { id: 'grenade', label: 'GRENADE', def: ['Digit4'] },
     { id: 'swap', label: 'SWAP WEAPONS', def: ['Space'] },
     { id: 'reload', label: 'RELOAD', def: ['KeyR'] },
     { id: 'nextScope', label: 'NEXT SCOPE', def: [] },

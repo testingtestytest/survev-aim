@@ -54,6 +54,11 @@
   const PATH_PAD = 12;           // room around the straight line for going around things
   const PATH_ARRIVE = 2.5;       // close enough to the goal
   const DIAG = Math.SQRT2;
+  const BLAST_STOP = 0.5;        // explosion.ts: only obstacles taller than this stop a blast
+  const GRAVITY = 10.5;          // projectile.ts
+  const GROUND_DRAG = 2.3;       // projectile.ts
+  const HAND_OFFSET = { x: 0.5, y: 1 };   // weaponManager.throwThrowable: where it leaves the hand (survev's y is up)
+  const SPAWN_HEIGHT = 0.5;      // weaponManager.throwThrowable
 
   // An endless field at the game's density: count = density * area / 250000 (map.ts genDensitySpawn).
   class ObstacleField {
@@ -105,6 +110,11 @@
       return this.near((a.x + b.x) / 2, (a.y + b.y) / 2, len / 2 + 3)
         .filter((o) => !o.dead && segCircle(a.x, a.y, b.x, b.y, o.x, o.y, o.r) != null)
         .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y));
+    }
+    // Does anything a blast can't pass, or a thrown grenade can't clear, stand on this line? explosion.ts: height above 0.5.
+    tallBetween(a, b) {
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      return this.near((a.x + b.x) / 2, (a.y + b.y) / 2, len / 2 + 3).some((o) => !o.dead && o.height > BLAST_STOP && segCircle(a.x, a.y, b.x, b.y, o.x, o.y, o.r) != null);
     }
     // Would moving along dir run into something soon? Moving away from what you're touching doesn't count.
     ahead(pos, dir, look, rad) {
@@ -186,7 +196,7 @@
   }
   SV.ObstacleField = ObstacleField;
 
-  SV.defOf = (type) => SV.GUNS[type] || SV.MELEE[type] || null;
+  SV.defOf = (type) => SV.GUNS[type] || SV.MELEE[type] || (type === 'frag' ? SV.FRAG : null);
   const recoilTimeOf = (d) => (d.recoilTime == null ? 1e10 : d.recoilTime);
 
   // player.damage armor step. Vest is skipped on headshots; the helmet counts fully on
@@ -231,7 +241,14 @@
       this.dead = false;
       this.helmet = opts.helmet || 0;
       this.chest = opts.chest || 0;
-      this.slots = [0, 1, 2].map((i) => ({ type: i === 2 ? 'fists' : '', ammo: 0, cooldown: 0, recoilTime: Infinity }));
+      this.slots = [0, 1, 2, 3].map((i) => ({ type: i === 2 ? 'fists' : '', ammo: 0, cooldown: 0, recoilTime: Infinity }));
+      this.nades = 0;
+      this.cooking = false;
+      this.cookT = 0;
+      this.throwCooldown = 0;
+      this.toMouseLen = C.player.throwableMaxMouseDist;   // how far away you're aiming, which sets a throw's strength
+      this.moveVx = 0; this.moveVy = 0;
+      this.lastSlot = 0;
       this.cur = 2;
       this.lastGun = 0;
       this.freeSwitchTimer = 0;
@@ -297,6 +314,12 @@
       this.freeSwitchTimer = 0;
     }
 
+    setGrenades(n) {
+      this.nades = n;
+      if (n <= 0 && this.cur === 3) this.switchTo(this.slots[this.lastSlot].type ? this.lastSlot : 2);
+      this.slots[3].type = n > 0 ? 'frag' : '';
+    }
+
     // weaponManager.setCurWeapIndex
     switchTo(idx, forceSwitch = false) {
       if (!this.slots[idx].type) return false;
@@ -304,6 +327,8 @@
       const curDef = this.activeDef;
       if (curDef.kind === 'gun' && curDef.fireMode === 'burst' && this.bursts.length && !forceSwitch) return false;
 
+      if (this.cooking && idx !== 3) this.throwGrenade(true);   // it drops at your feet, fuse still burning
+      this.cooking = false;
       this.meleeAnim = 0;                     // player.cancelAnim()
       this.shotSlowdownTimer = 0;             // <- quickswitch: removes the post-shot slowdown
       this.bursts.length = 0;
@@ -332,6 +357,7 @@
         nextW.cooldown = eff;
       }
       const from = this.cur;
+      this.lastSlot = from;
       if (from === 0 || from === 1) this.lastGun = from;
       this.cur = idx;
       this.cancelAction();
@@ -363,7 +389,7 @@
       }
       if (hasP || hasS) {
         const g = hasP ? 0 : 1;
-        return this.switchTo(this.cur === 2 ? g : 2);
+        return this.switchTo(this.cur >= 2 ? g : 2);
       }
       return false;
     }
@@ -373,8 +399,8 @@
     switchSound(curDef, nd, from, to, curW) {
       const A = this.world.audio;
       if (!A || A.me !== this) return;
-      if (nd.kind === 'melee') { A.play(nd.sound.deploy, 'sfx', this.pos, 3); return; }
-      const sameGroup = from !== 2 && to !== 2 && curW.cooldown > 0 && nd.deployGroup != null && nd.deployGroup === curDef.deployGroup;
+      if (nd.kind !== 'gun') { A.play(nd.sound.deploy, 'sfx', this.pos, 3); return; }
+      const sameGroup = from < 2 && to < 2 && curW.cooldown > 0 && nd.deployGroup != null && nd.deployGroup === curDef.deployGroup;
       let name = 'gun_switch_01';
       if (this.swapSoundT > 0 || sameGroup) name = nd.sound.deploy;
       else this.swapSoundT = C.player.freeSwitchCooldown;
@@ -430,6 +456,7 @@
       if (this.meleeAttacks.length === 0) s += d.speed.equip;
       if (this.shotSlowdownTimer > 0 && d.speed.attack !== undefined) s += d.speed.attack;
       if (this.boost >= SV.BOOST_SPEED_AT) s += C.player.boostMoveSpeed;
+      if (this.cooking) s -= C.player.cookSpeedPenalty;
       if (this.shotSlowdownTimer > 0) s *= 0.5;
       return clamp(s, 1, 10000);
     }
@@ -463,7 +490,8 @@
       if (this.visAnim) {
         const was = this.visAnim.t, def = SV.ANIM.anims[this.visAnim.name];
         this.visAnim.t += dt;
-        if (A) for (const [at, key] of def.sfx) if (at >= was && at < this.visAnim.t) A.play(this.activeDef.sound[key], 'sfx', this.pos, 3);   // client animPlaySound
+        // client animPlaySound. A throw's sound is played as it happens: the last grenade changes weapon right away.
+        if (A) for (const [at, key] of def.sfx) if (at >= was && at < this.visAnim.t && key !== 'throwing') A.play(this.activeDef.sound[key], 'sfx', this.pos, 3);
         const fr = def.frames;
         if (this.visAnim.t >= fr[fr.length - 1].time) this.visAnim = null;
       }
@@ -506,6 +534,7 @@
           this.pos.x += nx * (pen + 0.001); this.pos.y += ny * (pen + 0.001);
         }
       }
+      this.moveVx = (this.pos.x - this.posOld.x) / dt; this.moveVy = (this.pos.y - this.posOld.y) / dt;
       if (A) {                                // client player.ts: a step every 4 units walked
         this.stepDist += Math.hypot(this.pos.x - this.posOld.x, this.pos.y - this.posOld.y);
         if (this.stepDist > 4) { this.stepDist = 0; A.group('footstep_grass', this.pos, 3); }
@@ -524,10 +553,16 @@
       this.freeSwitchTimer -= dt;
       this.recoilTicker += dt;
       this.meleeAnim -= dt;
+      this.throwCooldown -= dt;
       for (const s of this.slots) { s.cooldown -= dt; s.recoilTime -= dt; }
       const d = this.activeDef;
       if (d.kind === 'gun') this.gunUpdate(dt, d);
-      else this.meleeUpdate(dt, d);
+      else if (d.kind === 'melee') this.meleeUpdate(dt, d);
+      else if (this.input.shootStart && !this.cooking) this.cookGrenade();
+      if (this.cooking) {
+        this.cookT += dt;
+        if (this.cookT > SV.FRAG.fuseTime || (!this.input.shootHold && this.cookT > C.player.cookTime)) this.throwGrenade();
+      }
       if (!this.bufferInput) this.input.shootStart = false;
     }
 
@@ -629,6 +664,44 @@
       if (this.events.shot) this.events.shot(this, d);
     }
 
+    // weaponManager.cookThrowable
+    cookGrenade() {
+      if (this.cooking || this.throwCooldown > 0) return;
+      this.cancelAction();
+      this.cookT = 0;
+      this.cooking = true;
+      this.playVis('cook', false);
+    }
+
+    // weaponManager.throwThrowable. Strength follows how far away you're aiming, and a swap away just lets go of it.
+    throwGrenade(noSpeed) {
+      if (!this.cooking || this.cookT < C.player.cookTime || this.nades <= 0) return;
+      const F = SV.FRAG, P = F.throwPhysics, max = C.player.throwableMaxMouseDist, w = this.world;
+      const mult = this.cur !== 3 || noSpeed ? 0 : clamp(this.toMouseLen, 0, max) / max;
+      const dir = this.dir, str = mult * P.speed;
+      const hand = { x: this.pos.x + dir.x * HAND_OFFSET.x - dir.y * HAND_OFFSET.y, y: this.pos.y + dir.y * HAND_OFFSET.x + dir.x * HAND_OFFSET.y };
+      // clipped to obstacles, so it doesn't start inside a tree
+      let spawn = hand, closest = Infinity;
+      if (w.field) {
+        for (const o of w.field.near(this.pos.x, this.pos.y, 5)) {
+          if (o.dead || o.height < SPAWN_HEIGHT) continue;
+          const t = segCircle(this.pos.x, this.pos.y, hand.x, hand.y, o.x, o.y, o.r);
+          if (t == null) continue;
+          const hx = this.pos.x + (hand.x - this.pos.x) * t, hy = this.pos.y + (hand.y - this.pos.y) * t, hd = Math.hypot(hx - o.x, hy - o.y) || 1;
+          const px = hx + ((hx - o.x) / hd) * 0.01, py = hy + ((hy - o.y) / hd) * 0.01, dist = Math.hypot(px - hand.x, py - hand.y);
+          if (dist < closest) { closest = dist; spawn = { x: px, y: py }; }
+        }
+      }
+      w.addProjectile(this, spawn, { x: this.moveVx * P.playerVelMult + dir.x * str, y: this.moveVy * P.playerVelMult + dir.y * str }, Math.max(0, F.fuseTime - this.cookT));
+      const A = w.audio;
+      if (A) A.play(F.sound.throwing, 'sfx', this.pos, 3);
+      this.cooking = false;
+      this.throwCooldown = C.player.throwTime;
+      this.playVis('throw', false);
+      this.nades--;
+      if (this.nades <= 0) this.setGrenades(0);   // showNextThrowable: none left, back to what you had
+    }
+
     // weaponManager.meleeUpdate
     meleeUpdate(dt, d) {
       const w = this.slots[this.cur], i = this.input;
@@ -694,6 +767,9 @@
       this.players = [];
       this.bullets = [];
       this.blood = [];
+      this.projectiles = []; // grenades in the air or on the ground
+      this.booms = [];       // explosions, for drawing: { x, y, born }
+      this.decals = [];      // scorch marks they leave
       this.field = null;     // obstacles, when the mode has them
       this.audio = null;     // SV.Audio, when this world should be heard
       this.time = 0;
@@ -707,10 +783,114 @@
     }
     addPlayer(x, y, opts) { const p = new Player(this, x, y, opts); this.players.push(p); return p; }
 
+    addProjectile(owner, pos, vel, fuse) {
+      const F = SV.FRAG;
+      this.projectiles.push({
+        owner, pos: { ...pos }, vel, fuse, z: SPAWN_HEIGHT, velZ: F.throwPhysics.velZ, below: 0, rad: F.rad * 0.5,
+        rot: 0, rotVel: F.throwPhysics.spinVel, rotDrag: F.throwPhysics.spinDrag * rand(1, 2), landed: false, lastHit: null, dead: false,
+      });
+    }
+
+    // server projectile.ts update, and the sounds from client projectile.ts
+    updateProjectile(q, dt) {
+      const A = this.audio;
+      if (q.z <= q.below) { const k = 1 / (1 + dt * GROUND_DRAG); q.vel.x *= k; q.vel.y *= k; }
+      const ox = q.pos.x, oy = q.pos.y;
+      q.pos.x += q.vel.x * dt; q.pos.y += q.vel.y * dt;
+      q.velZ -= GRAVITY * dt;
+      q.z = clamp(q.z + q.velZ * dt, q.below, C.projectileMaxHeight);
+      q.rotVel *= 1 / (1 + dt * q.rotDrag);
+      q.rot += q.rotVel * dt;
+      const speed = Math.max(Math.hypot(q.vel.x, q.vel.y), 0.000001), rad = q.rad / 2, line = speed * dt > q.rad;
+      let inside = false;
+      if (this.field) {
+        for (const o of this.field.near(q.pos.x, q.pos.y, rad + 3)) {
+          if (o.dead) continue;
+          const dx = q.pos.x - o.x, dy = q.pos.y - o.y, dist = Math.hypot(dx, dy) || 1e-6;
+          const touching = dist < o.r + rad;
+          const t = line ? segCircle(ox, oy, q.pos.x, q.pos.y, o.x, o.y, o.r) : null;
+          if (!touching && t == null) continue;
+          if (o.height > q.z) {
+            o.damage(1);
+            if (A && o.dead) A.play(o.def.sound.explode, 'sfx', o);
+            if (o.dead) continue;
+            let nx, ny;
+            if (t != null) {
+              const hx = ox + (q.pos.x - ox) * t, hy = oy + (q.pos.y - oy) * t, hd = Math.hypot(hx - o.x, hy - o.y) || 1;
+              nx = (hx - o.x) / hd; ny = (hy - o.y) / hd;
+              q.pos.x = hx + nx * (rad + 0.1); q.pos.y = hy + ny * (rad + 0.1);
+            } else {
+              nx = dx / dist; ny = dy / dist;
+              const pen = o.r + rad - dist;
+              q.pos.x += nx * (pen + 0.1); q.pos.y += ny * (pen + 0.1);
+            }
+            const ux = q.vel.x / speed, uy = q.vel.y / speed, dot = ux * nx + uy * ny, scale = Math.max(1 + dot, 0.15);
+            q.vel.x = (ux - 2 * dot * nx) * speed * scale; q.vel.y = (uy - 2 * dot * ny) * speed * scale;
+            if (A && speed > 7.5 && q.lastHit !== o) A.group(o.def.sound.bullet, q.pos);
+            q.lastHit = o;
+          } else {
+            q.below = Math.max(q.below, o.height);
+            inside = true;
+          }
+        }
+      }
+      if (!inside) q.below = 0;
+      if (!q.landed && q.z <= q.below) {
+        q.landed = true;
+        if (A) A.group(q.below > 0 ? 'stone_bullet' : SV.FRAG.ground, q.pos);
+      }
+      q.fuse -= dt;
+      if (q.fuse <= 0) { q.dead = true; this.explode(q.pos, q.owner); }
+    }
+
+    // server explosion.ts: rays out from the center. Each thing is damaged once, by the first ray to reach it, and
+    // only tall obstacles stop a ray, so a low rock doesn't protect you from a grenade landing behind it.
+    explode(pos, owner) {
+      const E = SV.FRAG.explosion, R = E.rad.max, A = this.audio;
+      const shotId = (this.shotSeq = (this.shotSeq || 0) + 1);
+      const obstacles = this.field ? this.field.near(pos.x, pos.y, R + 3).filter((o) => !o.dead) : [];
+      const players = this.players.filter((p) => !p.dead);
+      const things = [...obstacles.map((o) => ({ o, x: o.x, y: o.y, r: o.r })), ...players.map((p) => ({ p, x: p.pos.x, y: p.pos.y, r: p.rad }))];
+      const step = Math.min(Math.acos(1 - (0.75 / R) ** 2 / 2), 0.3), done = new Set();
+      for (let ang = -Math.PI; ang < Math.PI; ang += step) {
+        const ex = pos.x + Math.cos(ang) * R, ey = pos.y + Math.sin(ang) * R, hits = [];
+        for (const th of things) {
+          if (Math.hypot(pos.x - th.x, pos.y - th.y) < th.r + 0.01) { hits.push({ th, dist: 0 }); continue; }
+          const t = segCircle(pos.x, pos.y, ex, ey, th.x, th.y, th.r);
+          if (t != null) hits.push({ th, dist: t * R });
+        }
+        hits.sort((a, b) => a.dist - b.dist);
+        for (const h of hits) {
+          const th = h.th;
+          if (!done.has(th)) {
+            done.add(th);
+            let dmg = E.damage;
+            if (h.dist > E.rad.min && Math.hypot(pos.x - th.x, pos.y - th.y) >= E.rad.min + th.r) dmg = remap(h.dist, 0, R, dmg, 0);
+            if (th.o) {
+              th.o.damage(dmg * E.obstacleDamage);
+              if (A && th.o.dead) A.play(th.o.def.sound.explode, 'sfx', th.o);
+            } else {
+              const res = th.p.damage(dmg, SV.FRAG);
+              if (res && owner.events.hit) owner.events.hit(owner, th.p, res, SV.FRAG, shotId);
+            }
+          }
+          if (th.o && th.o.height > BLAST_STOP) break;
+        }
+      }
+      for (let n = 0; n < E.shrapnelCount; n++) {
+        const a = Math.random() * Math.PI * 2;
+        this.fireBullet(owner, SV.SHRAPNEL, pos, { x: Math.cos(a), y: Math.sin(a) }, false, shotId, 0, Math.random());
+      }
+      if (A) A.play(E.sound, 'sfx', pos, 0, 2);
+      this.booms.push({ x: pos.x, y: pos.y, born: this.time });
+      this.decals.push({ x: pos.x, y: pos.y, rot: Math.random() * Math.PI * 2 });
+      if (this.decals.length > 16) this.decals.shift();
+    }
+
     // bulletBarn.fireBullet + Bullet constructor (no perks, no variance on gun bullets)
-    fireBullet(owner, gunDef, pos, dir, shotFx, shotId, reflectCount = 0) {
+    fireBullet(owner, gunDef, pos, dir, shotFx, shotId, reflectCount = 0, varianceT = 1) {
       const b = gunDef.bullet;
-      const variance = 1 + b.variance;     // varianceT defaults to 1; gun bullets have variance 0
+      const variance = 1 + varianceT * b.variance;
       const distAdjIdx = b.noDistAdj ? 8 : randInt(0, 16);
       const distAdj = remap(distAdjIdx, 0, 16, -1, 1);
       const base = b.distance / Math.pow(C.bulletReflectDistDecay, reflectCount);
@@ -718,7 +898,7 @@
       this.bullets.push({
         owner, gunDef, pos: { ...pos }, start: { ...pos }, dir: { ...dir },
         speed: b.speed * variance, distance, traveled: 0, damage: b.damage, falloff: b.falloff, alive: true, shotFx,
-        collided: false, scale: 1, shotId, born: this.time, reflectCount,
+        collided: false, scale: 1, shotId, born: this.time, reflectCount, varianceT,
       });
     }
 
@@ -738,6 +918,11 @@
       this.time += dt;
       for (const p of this.players) p.update(dt);
       while (this.blood.length && this.time - this.blood[0].born > SV.BLOOD.life) this.blood.shift();
+      if (this.projectiles.length) {
+        for (const q of this.projectiles) this.updateProjectile(q, dt);
+        this.projectiles = this.projectiles.filter((q) => !q.dead);
+      }
+      while (this.booms.length && this.time - this.booms[0].born > SV.FRAG.burst.life) this.booms.shift();
       const bounced = [], A = this.audio;
       for (const b of this.bullets) {
         if (!b.alive) { if (b.collided) b.scale = Math.max(b.scale - dt * 6, 0); continue; }
@@ -750,7 +935,7 @@
         // segment vs circle and pan, nearest hit. A reflected bullet can hit whoever fired it (damageSelf).
         let hit = null, hitT = Infinity, pan = null, panD = Infinity, panBy = null;
         for (const p of this.players) {
-          if ((p === b.owner && !b.reflectCount) || p.dead) continue;
+          if ((p === b.owner && !b.reflectCount && !b.gunDef.bullet.shrapnel) || p.dead) continue;   // bullet.ts damageSelf
           const t = segCircle(b.pos.x, b.pos.y, nx, ny, p.pos.x, p.pos.y, p.rad);
           const ph = p.hasActivePan() ? this.panHit(b, nx, ny, step, p) : null;
           if (t != null && (!ph || t * step < ph.dist)) { if (t < hitT) { hitT = t; hit = p; } }
@@ -807,7 +992,7 @@
         if (b.traveled >= b.distance - 1e-6) b.alive = false;   // client: hidden at max range
       }
       this.bullets = this.bullets.filter((b) => b.alive || (b.collided && b.scale > 0));
-      for (const r of bounced) this.fireBullet(r.b.owner, r.b.gunDef, r.pos, r.dir, false, r.b.shotId, r.b.reflectCount + 1);
+      for (const r of bounced) this.fireBullet(r.b.owner, r.b.gunDef, r.pos, r.dir, false, r.b.shotId, r.b.reflectCount + 1, r.b.varianceT);
     }
   }
 

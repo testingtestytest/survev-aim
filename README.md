@@ -98,6 +98,17 @@ Survev modes open in **SIMPLE** settings with just the essentials. **FULL** show
 ## Sound
 Survev modes play the game's own sound effects, by the rules in survev's `client/src/audioManager.ts` and `client/src/lib/createJS.ts`: shots, bolts and pumps, reloads, weapon swaps, melee swings and hits, bullet hits, pan deflections, rock and tree hits and breaks, footsteps, and bullets passing close. Sounds fade with distance over the game's 48 units and sit in the ear they came from. Each round only loads the sounds its weapons need. **SOUND VOLUME** is under **KEYBINDS AND SETTINGS**. Standard modes are silent.
 
+## Grenades
+Frag grenades work as they do in the game, ported from survev's `weaponManager.ts`, `projectile.ts` and `explosion.ts`. **YOUR GRENADES** and **BOT GRENADES** turn them on, and both are on by default in 1v1. Quickswitch has **YOUR GRENADES**, off by default. You get 3, and a kill recharges them to 3.
+
+Press **4** to equip one, or scroll to it, then hold the fire button to cook it and let go to throw it.
+- **Fuse:** 4 seconds, counting from when you pull the pin. Cook it too long and it goes off in your hand. Swapping weapons while cooking drops it at your feet, unless you've held it for under 0.1s, which just cancels it.
+- **Throw strength:** set by how far from you the cursor is, up to full strength at 18 units, and full strength travels about 29 units. Some of your own movement carries over.
+- **Blast:** 125 damage within 5 units, fading to nothing at 12, reduced by armor, plus 12 pieces of shrapnel. It hurts you too.
+- **Obstacles:** trees stop blasts and grenades bounce off them. Grenades fly over rocks, and rocks don't stop a blast. Blasts damage both.
+
+The bot uses grenades to flush you out when you've been out of sight for a while, and now and then when you're reloading. It looks for a landing spot with a clear throw and a clear blast to you, leaves time to see what each one did, and goes back to its gun. Better bots throw sooner, land closer, and cook off more of the fuse so you have less time to run. Better bots also run from grenades that land near them.
+
 ## Infinite bullets
 **INFINITE BULLETS** is under each survev mode's full settings: **OFF**, **YOU**, or **YOU AND BOT**. Mags never drop and nothing reloads, at each gun's real rate of fire. It's a training aid, off by default.
 
@@ -133,7 +144,7 @@ Open **KEYBINDS AND SETTINGS** from the menu. Defaults:
 | Swap | Space |
 | Reload | R |
 
-Space swaps primary and secondary. While holding melee, it goes back to the last gun you held. With only one gun, it swaps between that gun and melee.
+**4** equips a grenade. Space swaps primary and secondary. While holding melee or a grenade, it goes back to the last gun you held. With only one gun, it swaps between that gun and melee.
 
 ## Crosshair
 Open **CROSSHAIR** from the menu to choose one of survev's 30 crosshair styles. Color, size and outline thickness can be changed. It's used as the real OS cursor, so it doesn't lag behind the mouse.

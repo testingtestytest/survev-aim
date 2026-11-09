@@ -23,7 +23,8 @@
   // client player.selectIdlePose
   function idlePoseOf(d) {
     let name = 'fists';
-    if (d.kind === 'melee') name = d.anim.idlePose;
+    if (d.kind === 'throwable') name = 'throwable';
+    else if (d.kind === 'melee') name = d.anim.idlePose;
     else if (d.pistol) name = d.isDual ? 'dualPistol' : 'pistol';
     else if (d.isBullpup) name = 'bullpup';
     else name = d.isDual ? 'dualRifle' : 'rifle';
@@ -141,7 +142,23 @@
     g.restore();
   }
 
-  function drawHand(g, pose, gunDef, meleeWorld, meleeBone) {
+  // client player.ts throwableState: what's in the hands depends on how far through cooking or throwing it is.
+  function handGrenades(p) {
+    const a = p.visAnim;
+    let state = 'equip';
+    if (a) for (const [at, s] of SV.ANIM.anims[a.name].state || []) if (a.t >= at) state = s;
+    return SV.FRAG.handImg[state];
+  }
+  function drawHeld(g, h) {
+    if (!h) return;
+    g.save();
+    g.translate(h.pos.x, h.pos.y);
+    g.rotate(Math.PI / 2);
+    sprite(g, h.sprite, 0xffffff, 0.5, 0.5, h.scale, h.scale);
+    g.restore();
+  }
+
+  function drawHand(g, pose, gunDef, meleeWorld, meleeBone, held) {
     g.save();
     g.translate(pose.pos.x, pose.pos.y);
     g.rotate(pose.rot);
@@ -151,6 +168,7 @@
     sprite(g, 'player-hands-01', SKIN, 0.5, 0.5, 0.175, 0.175);
     if (meleeWorld && meleeWorld.renderOnHand) drawMelee(g, meleeWorld, meleeBone);
     if (gunDef && gunDef.world.handsBelow) drawGun(g, gunDef);
+    drawHeld(g, held);
     g.restore();
   }
 
@@ -181,8 +199,9 @@
       g.restore();
     }
     const gun = d.kind === 'gun' ? d : null;
-    const drawL = () => drawHand(g, L, gun && gun.isDual ? gun : null);
-    const drawR = () => drawHand(g, R, gun, meleeWorld, bones[MELEE_R]);
+    const held = d.kind === 'throwable' ? handGrenades(p) : null;
+    const drawL = () => drawHand(g, L, gun && gun.isDual ? gun : null, null, null, held && held.left);
+    const drawR = () => drawHand(g, R, gun, meleeWorld, bones[MELEE_R], held && held.right);
     if (meleeWorld && meleeWorld.leftHandOntop) { drawR(); drawL(); } else { drawL(); drawR(); }
     const helmet = C.armor.helmetSkin[p.helmet];
     if (helmet) {                          // client: helmet sits 3.33px behind center, above the hands
@@ -244,7 +263,59 @@
     }
   }
 
+  // client objects/projectile.ts: grows with height, low ones under players and high ones over them.
+  function drawProjectiles(g, world, high, X, Y, S) {
+    const I = SV.FRAG.worldImg;
+    for (const q of world.projectiles) {
+      if ((q.z >= 0.25) !== high) continue;
+      const s = I.scale * remap(q.z, 0, C.projectileMaxHeight, 1, 4.75);
+      g.save();
+      g.translate(X(q.pos.x), Y(q.pos.y));
+      g.rotate(q.rot);
+      g.scale(S, S);
+      sprite(g, I.sprite, 0xffffff, 0.5, 0.5, s, s);
+      g.restore();
+    }
+  }
+  const remap = (v, a, b, x, y) => x + ((Math.max(a, Math.min(b, v)) - a) / (b - a)) * (y - x);
+  const BURST_TINT = 0xfb6200;             // particles.ts explosionBurst: hsvToRgb(0.065, 1, 0.98)
+  const SHAKE = { str: 0.2, dur: 0.35, near: 10, far: 40 };   // explosion.ts frag, camera.ts addShake
+  function drawDecals(g, world, X, Y, S) {
+    const D = SV.FRAG.decal;
+    for (const q of world.decals) {
+      g.save();
+      g.globalAlpha = D.alpha;
+      g.translate(X(q.x), Y(q.y));
+      g.rotate(q.rot);
+      g.scale(S, S);
+      sprite(g, D.sprite, 0x000000, 0.5, 0.5, D.scale, D.scale);
+      g.restore();
+    }
+  }
+  function drawBooms(g, world, X, Y, S) {
+    const B = SV.FRAG.burst;
+    for (const q of world.booms) {
+      const t = Math.min(1, (world.time - q.born) / B.life), s = B.scale[0] + (B.scale[1] - B.scale[0]) * t;
+      g.save();
+      g.globalAlpha = Math.max(0, Math.min(1, 1 - (t - B.fadeFrom[0]) / (B.fadeFrom[1] - B.fadeFrom[0])));
+      g.translate(X(q.x), Y(q.y));
+      g.scale(S, S);
+      sprite(g, B.image, BURST_TINT, 0.5, 0.5, s, s);
+      g.restore();
+    }
+  }
+  function shakeOf(world, cam) {
+    let int = 0;
+    for (const q of world.booms) {
+      const k = Math.max(0, Math.min(1, (SHAKE.far - Math.hypot(cam.x - q.x, cam.y - q.y)) / (SHAKE.far - SHAKE.near)));
+      int = Math.max(int, SHAKE.str * (1 - Math.min(1, (world.time - q.born) / SHAKE.dur)) * k);
+    }
+    return int;
+  }
+
   SV.drawWorld = (g, W, H, world, cam, zoomRadius, extras = {}) => {
+    const shake = world.booms.length ? shakeOf(world, cam) : 0;
+    if (shake > 0) { const a = Math.random() * Math.PI * 2; cam = { x: cam.x + Math.cos(a) * shake, y: cam.y + Math.sin(a) * shake }; }
     // client game.ts: targetZoom = max(minDim * 16/9, maxDim) * 0.5 / (zoom * ppu)
     const ppu = (Math.max(Math.min(W, H) * (16 / 9), Math.max(W, H)) * 0.5) / zoomRadius;
     const S = ppu / 16;
@@ -263,8 +334,11 @@
     g.stroke();
 
     const obstacles = world.field ? world.field.near(cam.x, cam.y, Math.hypot(W, H) / 2 / ppu + 8) : [];
+    drawDecals(g, world, X, Y, S);
     drawObstacles(g, obstacles, false, X, Y, S, W, H);
+    drawProjectiles(g, world, false, X, Y, S);
     for (const p of world.players) if (!p.dead) drawPlayer(g, p, X(p.pos.x), Y(p.pos.y), S);
+    drawProjectiles(g, world, true, X, Y, S);
     if (!AT.prefs || AT.prefs.blood !== 'off') drawBlood(g, world, X, Y, S);
 
     // Tracers: exact port of client/src/objects/bullet.ts. The sprite is player-bullet-trail-02
@@ -288,6 +362,7 @@
       g.restore();
     }
 
+    drawBooms(g, world, X, Y, S);
     drawObstacles(g, obstacles, true, X, Y, S, W, H);
 
     // optional training feedback: floating damage numbers
@@ -339,7 +414,7 @@
       return {
         touch, sc: 1,
         slotX: W - 6, slotW: 88 * 0.8333, slotWide: 88, slotH: 28,
-        slotY: [92, 127, 162],
+        slotY: [92, 127, 162, 197],
         name: { size: 10, right: 4, base: 18 }, img: 28, imgLeft: 2, number: null,
         hpW: 200, hpH: 18, hpPad: 4, hpBottom: 6, hpNum: 12,
         boost: [50, 50, 75, 25], boostH: 6, boostGap: 3, boostMargin: 0,
@@ -357,7 +432,7 @@
     return {
       touch, sc: s,
       slotX: W - 12, slotW: 160 * sr, slotWide: 192 * sr, slotH: 60 * sr,
-      slotY: [210, 140, 70].map((b) => H - 12 - (b + 60) * sr),
+      slotY: [210, 140, 70, 0].map((b) => H - 12 - (b + 60) * sr),
       name: { size: 18 * sr, right: 8 * sr, base: 54 * sr }, img: 60 * sr, imgLeft: 4 * sr, number: { size: 24 * sr, right: 8 * sr, base: 25 * sr },
       hpW: 400 * s, hpH: 32 * s, hpPad: 6 * s, hpBottom: 12, hpNum: 16 * s,
       boost: [100, 100, 150, 50].map((v) => v * s), boostH: 10 * s, boostGap: 3 * s, boostMargin: 8 * s,
@@ -391,10 +466,10 @@
     return { ...L, slots: L.slotY.map((y) => ({ x: L.slotX - L.slotW, y, w: L.slotW, h: L.slotH })) };
   };
   // Which button a tap landed on: 0-2 is a weapon slot, 'reload' reloads, null means it's for the sticks.
-  SV.touchButton = (W, H, x, y, hasGun) => {
+  SV.touchButton = (W, H, x, y, hasGun, hasNade) => {
     const L = SV.touchLayout(W, H), m = T_HIT_MARGIN;
     const inside = (r) => x >= r.x - m && x <= r.x + r.w + m && y >= r.y - m && y <= r.y + r.h + m;
-    for (let k = 0; k < 3; k++) if (inside(L.slots[k])) return k;
+    for (let k = 0; k < (hasNade ? 4 : 3); k++) if (inside(L.slots[k])) return k;
     if (!hasGun) return null;
     if (inside(L.clip) || inside(L.remain) || Math.hypot(x - L.reload.x, y - L.reload.y) <= L.reload.r + m * 2) return 'reload';
     return null;
@@ -419,12 +494,12 @@
   }
 
   // Slot widths and opacity animate as in ui2.ts; the grey "lost health" bar trails over 1s as in game.css.
-  const anim = { t: null, dt: 0, wide: [0, 0, 0], alpha: [0.6, 0.6, 0.6], ghost: 100, scopeOn: null };
+  const anim = { t: null, dt: 0, wide: [0, 0, 0, 0], alpha: [0.6, 0.6, 0.6, 0.6], ghost: 100, scopeOn: null };
   function stepAnim(me, time, touch) {
     const dt = anim.t == null || time < anim.t ? 1 : Math.min(1, time - anim.t);
     anim.t = time;
     anim.dt = dt;
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 4; k++) {
       const on = me.cur === k;
       const dw = (on ? 1 : 0) - anim.wide[k];
       anim.wide[k] += Math.sign(dw) * Math.min(Math.abs(dw), dt / 0.09);
@@ -436,7 +511,7 @@
   }
 
   function drawSlots(g, me, L, info) {
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 4; k++) {
       const slot = me.slots[k], d = SV.defOf(slot.type), sel = me.cur === k;
       const w = L.slotW + (L.slotWide - L.slotW) * anim.wide[k], x = L.slotX - w, y = L.slotY[k], h = L.slotH;
       if (!d) continue;
@@ -450,13 +525,13 @@
       icon(g, d.loot, 0, 0, L.img, L.img);
       g.restore();
       g.font = `700 ${L.name.size}px ${FONT}`;
-      const name = d.name, room = w - L.imgLeft - L.img * 0.7 - L.name.right;
+      const name = d.kind === 'throwable' ? `${L.touch ? 'Frag' : d.name} x${me.nades}` : d.name, room = w - L.imgLeft - L.img * 0.7 - L.name.right;
       const size = L.name.size * Math.min(1, room / g.measureText(name).width);
       text(g, name, x + w - L.name.right, y + L.name.base, size, { align: 'right', shadow: false });
       if (L.number) text(g, (info.keyLabels[k] || '')[0] || '', x + w - L.number.right, y + L.number.base, L.number.size, { align: 'right', shadow: false });
       g.restore();
       // Trainer addition, not in the game: how long until this weapon can fire.
-      const maxCd = Math.max(d.switchDelay, d.kind === 'gun' ? d.fireDelay : d.attack.cooldownTime);
+      const maxCd = Math.max(d.switchDelay, d.kind === 'gun' ? d.fireDelay : d.kind === 'melee' ? d.attack.cooldownTime : C.player.baseSwitchDelay);
       if (slot.cooldown > 0) {
         g.fillStyle = sel ? '#ff6a00' : 'rgba(255,106,0,0.6)';
         const bar = Math.max(2, h * 0.06);
@@ -517,6 +592,11 @@
 
   function drawAmmo(g, me, L) {
     const d = me.activeDef;
+    if (d.kind === 'throwable') {           // ui2.ts: the clip box counts what you're holding
+      rbox(g, L.clip.x, L.clip.y, L.clip.w, L.clip.h, 5, 'rgba(0,0,0,0.4)');
+      mid(g, String(me.nades), L.clip.x + L.clip.w / 2, L.clip.y + L.clip.h / 2, L.clip.size, { sh: L.touch ? 1 : 2 });
+      return;
+    }
     if (d.kind !== 'gun') return;
     const ammo = me.slots[me.cur].ammo, c = L.clip, r = L.remain, sh = { touch: 1, desk: 2 }[L.touch ? 'touch' : 'desk'];
     rbox(g, c.x, c.y, c.w, c.h, 5, 'rgba(0,0,0,0.4)');
