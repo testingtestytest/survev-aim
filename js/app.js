@@ -228,7 +228,7 @@
     const inGame = state === 'countdown' || state === 'playing';
     document.body.classList.toggle('in-game', inGame);
     $('#hud').classList.toggle('on', inGame && !(game && game.ownHud));
-    if (!inGame) $('#countdown').textContent = '';
+    if (!inGame) { $('#countdown').textContent = ''; $('#countdown-hint').textContent = ''; }
   }
 
   function goMenu() {
@@ -441,6 +441,7 @@
 
     $('#res-mode').textContent = mode.name + ' — ' + (timed() ? cfg.duration + 'S' : cfg.lives + ' LIVES');
     $('#res-score').textContent = r.score;
+    $('#res-score-label').textContent = r.scoreLabel || '';
     const tag = $('#res-best');
     tag.className = 'tag' + (isBest ? ' new' : '');
     tag.textContent = isBest ? 'NEW BEST' : 'BEST ' + (prev ?? '—');
@@ -543,7 +544,11 @@
     if (state === 'countdown') {
       countdown -= dt;
       const shown = countdown <= 0 ? '' : Math.ceil(countdown);
-      if (shown !== countdownShown) { countdownShown = shown; $('#countdown').textContent = shown; }
+      if (shown !== countdownShown) {
+        countdownShown = shown;
+        $('#countdown').textContent = shown;
+        $('#countdown-hint').textContent = shown ? (AT.touch ? 'DOUBLE TAP TO SKIP' : 'DOUBLE CLICK TO SKIP') : '';
+      }
       if (countdown <= 0) state = 'playing';
     } else if (state === 'playing') {
       elapsed += dt;
@@ -577,12 +582,23 @@
   requestAnimationFrame(frame);
 
   // ---------- input ----------
+  // Two presses in a row during the countdown skip the rest of it.
+  const DOUBLE_PRESS = 400;
+  let lastPress = -Infinity;
+  function pressedTwice() {
+    if (state !== 'countdown') return false;
+    const now = performance.now(), twice = now - lastPress < DOUBLE_PRESS;
+    lastPress = twice ? -Infinity : now;
+    if (twice) countdown = 0;
+    return twice;
+  }
   addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     mouse.x = e.clientX; mouse.y = e.clientY;
     // A click on a scope button is only that. Holding the button down here mustn't count as holding the trigger.
-    if ((state === 'playing' || state === 'countdown') && game.scopeClick && game.scopeClick(e.clientX, e.clientY)) return;
+    if ((state === 'playing' || state === 'countdown') && game.uiClick && game.uiClick(e.clientX, e.clientY)) return;
+    if (pressedTwice()) return;            // that press is for skipping, so it isn't holding the trigger when the round starts
     mouse.down = true;
     if (state === 'playing') game.mousedown(e.clientX, e.clientY);
   });
@@ -644,6 +660,7 @@
     // preventDefault also stops the browser sending a fake mouse click, which would count as a second shot.
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
+      if (e.touches.length === 1) pressedTwice();
       for (const t of e.changedTouches) {
         const pad = sticks();
         if (pad) {

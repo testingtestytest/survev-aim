@@ -207,6 +207,8 @@ canvas.pv.tall { height: 196px; }
 .lives i { width: 14px; height: 14px; border: 3px solid var(--accent); }
 .lives i.full { background: var(--accent); }
 
+#countdown-hint { position: fixed; left: 50%; transform: translateX(-50%); top: 66%; padding: 6px 12px; font-size: 14px; font-weight: 800; letter-spacing: 2px; white-space: nowrap; color: #fff; background: rgba(0,0,0,0.55); pointer-events: none; z-index: 6; }
+#countdown-hint:empty { display: none; }
 #countdown {
   position: fixed; inset: 0;
   display: flex; align-items: center; justify-content: center;

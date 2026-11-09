@@ -183,6 +183,7 @@
     }
     const meleeWorld = d.kind === 'melee' ? d.world : null;
     g.save();
+    if (p.safeT > 0) g.globalAlpha = 0.5;  // just lost a life, and can't be hurt yet
     g.translate(sx, sy);
     g.rotate(Math.atan2(p.dir.y, p.dir.x));
     g.scale(S, S);
@@ -218,7 +219,8 @@
   // under players (rocks, zIdx 10) or over them (trees, zIdx 800). What's left of a dead one is 75% opaque.
   const PLAYER_Z = 18;
   function drawObstacles(g, list, over, X, Y, S, W, H) {
-    const mine = list.filter((o) => (o.def.img.zIdx > PLAYER_Z) === over).sort((a, b) => a.scale - b.scale);
+    // What's left of a dead one is on the ground, under players, even for trees, which stand over them while alive.
+    const mine = list.filter((o) => (!o.dead && o.def.img.zIdx > PLAYER_Z) === over).sort((a, b) => a.scale - b.scale);
     for (const o of mine) {
       const img = o.def.img, s = o.scale * img.scale, sx = X(o.x), sy = Y(o.y);
       const c = tinted(img.sprite, 0xffffff), half = c ? (c.srcW / 2) * s * S : 0;
@@ -280,6 +282,45 @@
   const remap = (v, a, b, x, y) => x + ((Math.max(a, Math.min(b, v)) - a) / (b - a)) * (y - x);
   const BURST_TINT = 0xfb6200;             // particles.ts explosionBurst: hsvToRgb(0.065, 1, 0.98)
   const SHAKE = { str: 0.2, dur: 0.35, near: 10, far: 40 };   // explosion.ts frag, camera.ts addShake
+  // client objects/obstacle.ts: 5 to 10 pieces thrown out when something breaks, and particles.ts rockBreak and woodLog.
+  const DEBRIS = {
+    stone: { image: 'map-stone-01', life: [0.8, 1], drag: [1, 5], rotVel: 0, start: [0.07, 0.12], end: [0.05, 0.1], tint: (v) => [v, v, v], value: [0.5, 0.75] },
+    tree: { image: 'part-log-01', life: [1, 1.5], drag: [1, 5], rotVel: Math.PI * 3, start: [0.1, 0.2], end: [0.08, 0.18], tint: (v) => [v, v * 0.3, 0], value: [0.35, 0.45] },
+  };
+  const DEBRIS_FADE = [0.9, 1], DEBRIS_COUNT = [5, 11], DEBRIS_SPEED = [5, 15];
+  const between = (r) => r[0] + Math.random() * (r[1] - r[0]);
+  function spawnDebris(world) {
+    const f = world.field;
+    if (!f || !f.broken.length) return;
+    for (const o of f.broken) {
+      const D = DEBRIS[o.kind];
+      if (!D) continue;
+      const count = Math.floor(between(DEBRIS_COUNT));
+      for (let n = 0; n < count; n++) {
+        const a = Math.random() * Math.PI * 2, sp = between(DEBRIS_SPEED);
+        // the value is rounded so tinted copies can be reused
+        const v = Math.round(between(D.value) * 20) / 20, c = D.tint(v).map((q) => Math.round(q * 255));
+        world.debris.push({ D, x: o.x, y: o.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, born: world.time, life: between(D.life), drag: between(D.drag), rot: Math.random() * Math.PI * 2,
+          start: between(D.start), end: between(D.end), tint: (c[0] << 16) | (c[1] << 8) | c[2] });
+      }
+    }
+    f.broken.length = 0;
+  }
+  function drawDebris(g, world, X, Y, S) {
+    spawnDebris(world);
+    if (!world.debris.length) return;
+    world.debris = world.debris.filter((q) => world.time - q.born < q.life);
+    for (const q of world.debris) {
+      const age = world.time - q.born, t = age / q.life, go = (1 - Math.exp(-q.drag * age)) / q.drag, s = q.start + (q.end - q.start) * t;
+      g.save();
+      g.globalAlpha = Math.max(0, Math.min(1, 1 - (t - DEBRIS_FADE[0]) / (DEBRIS_FADE[1] - DEBRIS_FADE[0])));
+      g.translate(X(q.x + q.vx * go), Y(q.y + q.vy * go));
+      g.rotate(q.rot + q.D.rotVel * age);
+      g.scale(S, S);
+      sprite(g, q.D.image, q.tint, 0.5, 0.5, s, s);
+      g.restore();
+    }
+  }
   function drawDecals(g, world, X, Y, S) {
     const D = SV.FRAG.decal;
     for (const q of world.decals) {
@@ -362,6 +403,7 @@
       g.restore();
     }
 
+    drawDebris(g, world, X, Y, S);
     drawBooms(g, world, X, Y, S);
     drawObstacles(g, obstacles, true, X, Y, S, W, H);
 
@@ -454,6 +496,20 @@
       return { cx, cy: S.y + S.r, r: S.r * q, q, v };
     });
   }
+  // #ui-medical-interactive: a column of healing and adrenaline items, right of center. Phones have the weapons
+  // down that side, so the column sits just to their left there.
+  function itemBoxes(W, H, touch, ids) {
+    const L = hudLayout(W, H, touch), bw = touch ? 58 : 85, bh = touch ? 26 : 32, gap = touch ? 4 : 5;
+    const x = touch ? L.slotX - L.slotWide - 6 - bw : W - 12 - bw;
+    const y = touch ? L.slotY[0] : H * 0.4 - (ids.length * (bh + gap) - gap) / 2;
+    return ids.map((id, k) => ({ id, x, y: y + k * (bh + gap), w: bw, h: bh }));
+  }
+  // Which item button is at this point of the screen, or null.
+  SV.itemAt = (W, H, touch, x, y) => {
+    const m = touch ? 2 : 0;
+    const b = itemBoxes(W, H, touch, Object.keys(SV.ITEMS)).find((q) => x >= q.x - m && x <= q.x + q.w + m && y >= q.y - m && y <= q.y + q.h + m);
+    return b ? b.id : null;
+  };
   // Which scope is at this point of the screen, or null.
   SV.scopeAt = (W, H, touch, scopes, cur, x, y) => {
     const S = hudLayout(W, H, touch).scope;
@@ -525,7 +581,7 @@
       icon(g, d.loot, 0, 0, L.img, L.img);
       g.restore();
       g.font = `700 ${L.name.size}px ${FONT}`;
-      const name = d.kind === 'throwable' ? `${L.touch ? 'Frag' : d.name} x${me.nades}` : d.name, room = w - L.imgLeft - L.img * 0.7 - L.name.right;
+      const name = d.kind === 'throwable' ? `Frag x${me.nades}` : d.name, room = w - L.imgLeft - L.img * 0.7 - L.name.right;
       const size = L.name.size * Math.min(1, room / g.measureText(name).width);
       text(g, name, x + w - L.name.right, y + L.name.base, size, { align: 'right', shadow: false });
       if (L.number) text(g, (info.keyLabels[k] || '')[0] || '', x + w - L.number.right, y + L.number.base, L.number.size, { align: 'right', shadow: false });
@@ -610,10 +666,24 @@
     }
   }
 
+  function drawItems(g, W, H, me, L, info) {
+    const using = me.action && me.action.type === 'use' ? me.action.item : null;
+    for (const b of itemBoxes(W, H, L.touch, Object.keys(SV.ITEMS))) {
+      const d = SV.ITEMS[b.id], hover = info.mouse && !L.touch && info.mouse.x >= b.x && info.mouse.x <= b.x + b.w && info.mouse.y >= b.y && info.mouse.y <= b.y + b.h;
+      g.save();
+      g.globalAlpha = hover || using === b.id ? 1 : 0.75;     // #ui-right-center
+      rbox(g, b.x, b.y, b.w, b.h, 5, 'rgba(0,0,0,0.4)');
+      if (using === b.id) { g.strokeStyle = '#00ff00'; g.lineWidth = 2; g.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2); }   // .ui-outline-hover
+      icon(g, d.loot, b.x + b.w - 5 - (b.h - 2) / 2, b.y + b.h / 2, b.h - 2, b.h - 2);
+      mid(g, '∞', b.x + (b.w - b.h) / 2, b.y + b.h / 2, L.touch ? 16 : 20, { shadow: false });
+      g.restore();
+    }
+  }
+
   // ui/pieTimer.ts: the reload ring with a countdown and a label under it.
   function drawPie(g, W, me, L) {
     if (!me.action) return;
-    const P = L.pie, elapsed = Math.min(me.action.time, me.action.duration), dur = me.action.duration, label = 'Reloading';
+    const P = L.pie, elapsed = Math.min(me.action.time, me.action.duration), dur = me.action.duration, label = me.action.type === 'use' ? `Using ${SV.ITEMS[me.action.item].name}` : 'Reloading';
     g.save();
     g.translate(W / 2, P.y);
     g.scale(P.s, P.s);
@@ -733,6 +803,7 @@
     drawVitals(g, W, H, me, L, info);
     drawAmmo(g, me, L);
     drawPie(g, W, me, L);
+    drawItems(g, W, H, me, L, info);
     drawTop(g, W, me, L, info);
     if (!L.touch && info.timeline) {
       const s = Math.max(0.75, Math.min(1.25, H / 900));

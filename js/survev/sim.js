@@ -43,7 +43,11 @@
       this.health = Math.max(0, this.health - amount);
       const t = clamp(this.health / this.maxHealth, 0, 1);
       this.scale = this.minScale + (this.maxScale - this.minScale) * t;
-      if (this.health <= 0) { this.dead = true; this.scale = this.minScale; }
+      if (this.health <= 0) {
+        this.dead = true;
+        this.scale = this.minScale;
+        if (this.field) this.field.broken.push(this);   // the renderer turns these into debris
+      }
     }
   }
 
@@ -62,7 +66,7 @@
 
   // An endless field at the game's density: count = density * area / 250000 (map.ts genDensitySpawn).
   class ObstacleField {
-    constructor(mult) { this.mult = mult; this.chunks = new Map(); }
+    constructor(mult) { this.mult = mult; this.chunks = new Map(); this.broken = []; }
     chunk(cx, cy) {
       const key = cx + ',' + cy;
       let list = this.chunks.get(key);
@@ -81,6 +85,7 @@
         for (let n = 0; n < count; n++) {
           for (let tries = 0; tries < 8; tries++) {
             const o = new Obstacle(kind, (cx + Math.random()) * CHUNK, (cy + Math.random()) * CHUNK);
+            o.field = this;
             const clear = (q) => Math.hypot(q.x - o.x, q.y - o.y) >= q.r + o.r + PASS_GAP;
             if (Math.hypot(o.x, o.y) < o.r + SPAWN_CLEAR || !existing.every(clear) || !list.every(clear)) continue;
             list.push(o);
@@ -248,6 +253,7 @@
       this.throwCooldown = 0;
       this.toMouseLen = C.player.throwableMaxMouseDist;   // how far away you're aiming, which sets a throw's strength
       this.moveVx = 0; this.moveVy = 0;
+      this.safeT = 0;               // can't be hurt for this long after coming back
       this.lastSlot = 0;
       this.cur = 2;
       this.lastGun = 0;
@@ -408,6 +414,30 @@
       this.cycleSound = A.play(name, 'activePlayer');
     }
 
+    // player.ts isReloading: an action is either a reload or using an item.
+    get reloading() { return !!this.action && this.action.type !== 'use'; }
+
+    // player.ts useHealingItem / useBoostItem, with as many as you like: the trainer never runs out.
+    useItem(id) {
+      const d = SV.ITEMS[id];
+      if (!d) return false;
+      if ((d.kind === 'heal' && this.health === d.maxHeal) || (this.action && this.action.type === 'use') || this.cooking) return false;
+      this.cancelAction();
+      this.action = { type: 'use', item: id, time: 0, duration: d.useTime };
+      const A = this.world.audio;
+      if (A) this.actionSound = A.play(d.sound, A.me === this ? 'activePlayer' : 'otherPlayers', this.pos, 2);
+      return true;
+    }
+    // player.ts update: what happens when the time is up.
+    finishItem(id) {
+      const d = SV.ITEMS[id];
+      if (d.kind === 'heal') this.health = Math.min(C.player.health, this.health + d.amount);
+      else this.boost = Math.min(100, this.boost + d.amount);
+      this.actionSound = null;
+      const s = this.slots[this.cur];
+      if (this.cur < 2 && s.ammo === 0) this.scheduledReload = true;
+    }
+
     cancelAction() {
       this.action = null;
       if (this.actionSound) { this.world.audio.stop(this.actionSound); this.actionSound = null; }
@@ -457,12 +487,12 @@
       if (this.shotSlowdownTimer > 0 && d.speed.attack !== undefined) s += d.speed.attack;
       if (this.boost >= SV.BOOST_SPEED_AT) s += C.player.boostMoveSpeed;
       if (this.cooking) s -= C.player.cookSpeedPenalty;
-      if (this.shotSlowdownTimer > 0) s *= 0.5;
+      if (this.shotSlowdownTimer > 0 || (this.action && this.action.type === 'use')) s *= 0.5;
       return clamp(s, 1, 10000);
     }
 
     damage(amount, srcDef) {
-      if (this.dead) return null;
+      if (this.dead || this.safeT > 0) return null;
       let dmg = amount, head = false;
       if (srcDef && srcDef.kind === 'gun' && srcDef.headshotMult != null) {
         head = Math.random() < C.player.headshotChance;
@@ -487,6 +517,7 @@
       }
       const A = this.world.audio;
       this.swapSoundT -= dt;
+      this.safeT -= dt;
       if (this.visAnim) {
         const was = this.visAnim.t, def = SV.ANIM.anims[this.visAnim.name];
         this.visAnim.t += dt;
@@ -501,9 +532,10 @@
       if (this.action) {
         this.action.time += dt;
         if (this.action.time >= this.action.duration) {
-          const t = this.action.type;
+          const t = this.action.type, item = this.action.item;
           this.action = null;
-          this.reload(t);
+          if (t === 'use') this.finishItem(item);
+          else this.reload(t);
         }
       }
 
@@ -770,6 +802,7 @@
       this.projectiles = []; // grenades in the air or on the ground
       this.booms = [];       // explosions, for drawing: { x, y, born }
       this.decals = [];      // scorch marks they leave
+      this.debris = [];      // bits of broken obstacles, for drawing
       this.field = null;     // obstacles, when the mode has them
       this.audio = null;     // SV.Audio, when this world should be heard
       this.time = 0;
@@ -782,6 +815,9 @@
       if (o.dead) this.audio.play(o.def.sound.explode, 'sfx', o);
     }
     addPlayer(x, y, opts) { const p = new Player(this, x, y, opts); this.players.push(p); return p; }
+
+    // Everything still flying goes when a life ends, so one grenade or burst can't take the next life too.
+    clearShots() { this.bullets = []; this.projectiles = []; }
 
     addProjectile(owner, pos, vel, fuse) {
       const F = SV.FRAG;
@@ -979,7 +1015,7 @@
           let dmg = b.damage / (b.reflectCount + 1);   // bullet.ts: each bounce divides the damage
           if (C.bulletFalloff) dmg *= remap(clamp(b.traveled / b.distance, 0, 1), 0, 1, 1, b.falloff);
           // bullet.ts: bullet blood is attached to the player who was hit, at the point of impact
-          this.blood.push({ on: hit, x: b.pos.x - hit.pos.x, y: b.pos.y - hit.pos.y, born: this.time });
+          if (!(hit.safeT > 0)) this.blood.push({ on: hit, x: b.pos.x - hit.pos.x, y: b.pos.y - hit.pos.y, born: this.time });
           if (A) A.group('player_bullet_hit', hit.pos, 1);
           const res = hit.damage(dmg, b.gunDef);
           if (res && b.owner.events.hit) b.owner.events.hit(b.owner, hit, res, b.gunDef, b.shotId);

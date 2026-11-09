@@ -6,7 +6,7 @@
   const MIN_VOLUME = 0.003;         // AudioManagerMinAllowedVolume: anything quieter isn't played
   const COALESCE_TIME = 0.03;       // createJS kCoalesceTime
   const ALWAYS = ['gun_switch_01', 'footstep_grass', 'player_bullet_hit', 'bullet_whiz',
-    SV.FRAG.explosion.sound, SV.FRAG.ground, ...Object.values(SV.FRAG.sound),
+    SV.FRAG.explosion.sound, SV.FRAG.ground, ...Object.values(SV.FRAG.sound), ...Object.values(SV.ITEMS).map((i) => i.sound),
     ...Object.values(SV.OBSTACLE_DEFS).flatMap((o) => [o.sound.bullet, o.sound.punch, o.sound.explode])];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 

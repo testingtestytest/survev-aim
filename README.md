@@ -14,7 +14,7 @@ Serve the folder with `python -m http.server 8000` and open http://localhost:800
 
 ## Survev modes
 Real survev weapons, using the game's own numbers. You're always at the center of the screen and move with WASD.
-- **1v1**: the bot strafes, moves between ranges, rushes you at the chosen frequency and fights back with chosen weapons, mostly mag dumping automatic guns with an occasional short burst.
+- **1v1**: the bot strafes, moves between ranges, rushes you at the chosen frequency and fights back with chosen weapons, mostly mag dumping automatic guns with an occasional short burst. It's played until you run out of lives, 5 by default, and your score is how many kills you got. Losing a life clears everything in the air and leaves you safe for a second, shown by going see-through, so one grenade or burst can't cost two. **PLAY UNTIL** changes it to a timer, and the number of lives is under **FULL**.
 - **Quickswitch**: a bot strafes and moves between ranges. A timeline shows every shot, every hit, and each switch delay (green means it was a free switch).
 
 **Bot distance** defaults to **Dynamic**: the bot picks a random distance from 4 to 24 units, holds loosely around it while slowly drifting, and picks another after 1.5–6 seconds. If you retreat it lets you go instead of following, and it gets back out after a rush or brawl. It stays on your screen at any scope. **Close**, **Mid**, **Far** and **Long** hold one fixed distance instead, and Far and Long can go off screen at low zoom.
@@ -109,6 +109,20 @@ Press **4** to equip one, or scroll to it, then hold the fire button to cook it 
 
 The bot uses grenades to flush you out when you've been out of sight for a while, and now and then when you're reloading. It looks for a landing spot with a clear throw and a clear blast to you, leaves time to see what each one did, and goes back to its gun. Better bots throw sooner, land closer, and cook off more of the fuse so you have less time to run. Better bots also run from grenades that land near them.
 
+## Healing and adrenaline
+The game's four items, and you never run out:
+
+| Item | Key | Takes | Gives |
+|---|---|---|---|
+| Bandage | 7 | 3s | 15 health |
+| Med Kit | 8 | 6s | 100 health |
+| Soda | 9 | 3s | 25 adrenaline |
+| Pills | 0 | 5s | 50 adrenaline |
+
+Press the key or click the item on the right of the screen. As in the game, you walk at half speed while using one, and firing, swinging, cooking a grenade or swapping weapons cancels it. You can't use a healing item at full health, or start one while another is going. **BOT USES ITEMS** turns them on or off for the bot.
+
+The bot heals and tops up behind cover if there's any nearby, or when it's far away and you've left it alone. Better bots do it sooner, and stop when they come under fire or you come for them.
+
 ## Infinite bullets
 **INFINITE BULLETS** is under each survev mode's full settings: **OFF**, **YOU**, or **YOU AND BOT**. Mags never drop and nothing reloads, at each gun's real rate of fire. It's a training aid, off by default.
 
@@ -131,6 +145,8 @@ Phones and tablets are detected the way survev does it, so a touchscreen laptop 
 - **Options in FULL:** move stick and aim stick can be **Anywhere** (the default) or **Fixed**, and the aim line can be turned off.
 
 The X in the top-right corner goes back to the menu. Browsers can hold back the first few pixels of finger movement, so a very small pull may not register.
+
+A press on the scope row or an item never fires your gun. Double-clicking or double-tapping during the countdown skips the rest of it.
 
 ## Keybinds
 Open **KEYBINDS AND SETTINGS** from the menu. Defaults:

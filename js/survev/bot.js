@@ -21,6 +21,8 @@
   //             the range (shotgun close, the other gun far), chargeRead: chance it waits for an opening
   //             before charging and calls a charge off if you recover, chargeWeave: chance it weaves on the way in
   //  Backing off  reloadBack: chance it gives ground when it starts a reload, hurtBack: chance it does when hurt
+  //  Items      medCare: chance per check it does something about needing an item, medAt: health it heals below,
+  //             boostAt: adrenaline it tops up below, medCancel: chance it stops using one when it's in danger
   //  Grenades   nadeCare: chance per check it throws one, nadeHide: seconds you've been out of sight before it thinks
   //             of it, nadeAim: how far off it lands (units, std dev), nadeCook: how much of the fuse it burns off so
   //             there's less time to run, nadeLead: how well it allows for its own movement, nadeFear: chance it
@@ -42,10 +44,10 @@
   //  Obstacles  replan: seconds between path updates, seekAfter: seconds without seeing you before it goes
   //             looking, losCare: chance it holds fire instead of shooting an obstacle in the way
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1], chargeRead: 0.1,  chargeWeave: 0,   reloadBack: 0.15, hurtBack: 0.2, nadeCare: 0.15, nadeHide: 3,   nadeAim: 5,   nadeCook: 0,    nadeLead: 0,   nadeFear: 0.25 },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2], chargeRead: 0.45, chargeWeave: 0.3, reloadBack: 0.4,  hurtBack: 0.5, nadeCare: 0.4,  nadeHide: 2,   nadeAim: 3,   nadeCook: 0.3,  nadeLead: 0.4, nadeFear: 0.55 },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4], chargeRead: 0.85, chargeWeave: 0.8, reloadBack: 0.75, hurtBack: 0.8, nadeCare: 0.75, nadeHide: 1.3, nadeAim: 1.6, nadeCook: 0.7,  nadeLead: 0.8, nadeFear: 0.85 },
-    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6], chargeRead: 0.95, chargeWeave: 1,   reloadBack: 0.95, hurtBack: 1, nadeCare: 1,    nadeHide: 0.8, nadeAim: 0.8, nadeCook: 0.95, nadeLead: 1,   nadeFear: 1 },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1], chargeRead: 0.1,  chargeWeave: 0,   reloadBack: 0.15, hurtBack: 0.2, nadeCare: 0.15, nadeHide: 3,   nadeAim: 5,   nadeCook: 0,    nadeLead: 0,   nadeFear: 0.25, medCare: 0.3,  medAt: 35, boostAt: 0,  medCancel: 0.3 },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2], chargeRead: 0.45, chargeWeave: 0.3, reloadBack: 0.4,  hurtBack: 0.5, nadeCare: 0.4,  nadeHide: 2,   nadeAim: 3,   nadeCook: 0.3,  nadeLead: 0.4, nadeFear: 0.55, medCare: 0.55, medAt: 50, boostAt: 20, medCancel: 0.6 },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4], chargeRead: 0.85, chargeWeave: 0.8, reloadBack: 0.75, hurtBack: 0.8, nadeCare: 0.75, nadeHide: 1.3, nadeAim: 1.6, nadeCook: 0.7,  nadeLead: 0.8, nadeFear: 0.85, medCare: 0.85, medAt: 65, boostAt: 40, medCancel: 0.9 },
+    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6], chargeRead: 0.95, chargeWeave: 1,   reloadBack: 0.95, hurtBack: 1, nadeCare: 1,    nadeHide: 0.8, nadeAim: 0.8, nadeCook: 0.95, nadeLead: 1,   nadeFear: 1, medCare: 1,    medAt: 75, boostAt: 55, medCancel: 1 },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -126,6 +128,15 @@
   const NADE_REST = 1.478;            // a throw travels this many seconds' worth of its speed: 1.043 in the air + 1/drag rolling
   const NADE_RUN_FROM = 9;            // units from where it'll go off that it wants to be further than
   const NADE_NOTICE = 3.4;            // s of fuse left when it notices one, so a fresh throw isn't an instant reaction
+  // Using healing and adrenaline items.
+  const MED_EVERY = [0.3, 0.6];       // s between checks
+  const MED_DANGER = 7;               // you this close is danger
+  const MED_SEEN = 18;                // and in view within this, if it started out of your sight
+  const MED_RETRY = [1.5, 3];         // s after calling one off before it thinks of it again
+  const MED_LINGER = 0.4;             // s it stays behind cover after finishing
+  const MED_TRIP_GAP = 3;             // s after a trip to cover before it tries another, if that one didn't work out
+  const MED_BIG_BELOW = 45;           // health where it wants the med kit rather than a bandage
+  const MED_PILLS_BELOW = 25;         // adrenaline where it wants pills rather than a soda
   // Finding a way around obstacles.
   const NAV_CLEAR = 0.45;             // units it tries to leave between itself and an obstacle
   const NAV_LOOK = 2.5;               // how far ahead it checks a direction before choosing it
@@ -161,7 +172,7 @@
   const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 
   class Bot {
-    // opts: { distance (units or 'dynamic'), rush, movement: 'strafe'|'wide'|'mixed', still, fire, skill,
+    // opts: { distance (units or 'dynamic'), rush, movement: 'strafe'|'wide'|'mixed', still, fire, skill, items,
     //         dodge, dodgeReact (s), view: () => { hw, hh } the half-size of your screen in units }
     constructor(player, target, opts) {
       this.p = player;
@@ -228,6 +239,12 @@
       this.quietT = 0;                    // how long since you last had a shot in the air
       this.sneaks = 0;                    // stats, used by the tests
       this.coverUses = 0;
+      this.medT = 2;
+      this.medNoTrip = 0;
+      this.medRolled = false;             // it has already decided about the danger it's in
+      this.medHid = false;                // it started using this one out of your sight
+      this.meds = 0;                      // stats, used by the tests
+      this.medCancels = 0;
       this.nade = null;                   // a grenade throw in progress
       this.nadeT = 1.5;
       this.nadeThrows = 0;                // stats, used by the tests
@@ -354,7 +371,7 @@
     timeToFire() {
       const p = this.p, slot = p.cur === 2 ? p.lastGun : p.cur, w = p.slots[slot], d = SV.defOf(w.type);
       if (!d || d.kind !== 'gun') return 0;
-      if (p.action && slot === p.cur) {
+      if (p.reloading && slot === p.cur) {
         const shells = d.maxReload < d.maxClip && p.action.type !== 'alt' ? Math.max(1, this.enoughAmmo(d) - w.ammo) : 1;
         return p.action.duration * shells - p.action.time;
       }
@@ -411,9 +428,9 @@
       });
       if (best === Infinity) {                 // nothing loaded: however long the reload has left, or a guess at one
         const d = t.activeDef;
-        return t.action ? t.action.duration - t.action.time : d && d.kind === 'gun' ? d.reloadTime : 1;
+        return t.reloading ? t.action.duration - t.action.time : d && d.kind === 'gun' ? d.reloadTime : 1;
       }
-      return t.action && t.cur < 2 && t.slots[t.cur].ammo <= 0 ? Math.max(best, 0.1) : best;
+      return t.reloading && t.cur < 2 && t.slots[t.cur].ammo <= 0 ? Math.max(best, 0.1) : best;
     }
     // You can't shoot before it gets there.
     hasOpening(dist) { return this.youCanFireIn() + CHARGE_SLACK >= Math.max(0, dist - this.meleeReach()) / CHARGE_SPEED; }
@@ -506,7 +523,7 @@
       if (o.ammo > 0) this.topUp = false;
       // Empty: change to the other gun rather than reload this one. If both are empty, change once and
       // reload that one, so the bot keeps using both guns instead of settling on the last one it fired.
-      if (w.ammo === 0 && this.reloadSlot !== p.cur && !p.action) {
+      if (w.ammo === 0 && this.reloadSlot !== p.cur && !p.reloading) {
         // Behind the pan it has time to reload the single-shot gun instead of going back to spraying.
         if (this.swapT == null && this.shield && d.fireMode === 'single') { this.reloadSlot = p.cur; return; }
         // At long range, a bot with sense reloads its long-range gun instead of falling back on the shotgun.
@@ -526,7 +543,7 @@
       this.swapT = null;
       // Shielding: one careful shot at a time suits a single-shot gun, if it has one.
       const od = SV.defOf(o.type);
-      if (this.shield && d.fireMode !== 'single' && od && od.fireMode === 'single' && o.ammo > 0 && !p.bursts.length && !p.action) {
+      if (this.shield && d.fireMode !== 'single' && od && od.fireMode === 'single' && o.ammo > 0 && !p.bursts.length && !p.reloading) {
         this.qsT = null; this.spraying = false;
         p.switchTo(other);
         return;
@@ -553,7 +570,7 @@
       }
       if ((this.senseT -= dt) <= 0) {
         this.senseT = rand(SENSE_EVERY[0], SENSE_EVERY[1]);
-        if (this.preferredSlot(dist) === other && !keepSingle && o.ammo > 0 && !p.action && !p.bursts.length && this.reloadSlot == null
+        if (this.preferredSlot(dist) === other && !keepSingle && o.ammo > 0 && !p.reloading && !p.bursts.length && this.reloadSlot == null
             && (!S.qsCare || cost <= Math.max(w.cooldown, C.player.baseSwitchDelay)) && Math.random() < S.gunSense) {
           this.qsT = null; this.spraying = false;
           p.switchTo(other);
@@ -576,6 +593,64 @@
       return null;
     }
 
+    // What it needs most, if anything. The long ones are for when it's properly out of sight.
+    medItem(hidden) {
+      const p = this.p, S = this.S;
+      if (p.health <= S.medAt) return p.health < MED_BIG_BELOW && hidden ? 'healthkit' : 'bandage';
+      // Topping up can wait while it's got a grenade to flush you out with.
+      if (p.nades > 0 && this.noSightT > S.nadeHide) return null;
+      if (p.boost < S.boostAt) return p.boost < MED_PILLS_BELOW && hidden ? 'painkiller' : 'soda';
+      return null;
+    }
+
+    // Heals and drinks where you can't get at it: behind cover if there's any, otherwise far away and left alone.
+    // It stops if you come for it, or it's under fire, unless it's too new at this to notice in time.
+    // True while it has an item out, when its hands are full.
+    medThinking(dist, dt) {
+      const p = this.p, S = this.S, world = p.world;
+      if (!this.o.items) return false;
+      if (p.action && p.action.type === 'use') {
+        if (this.cover && this.cover.med) this.cover.until = world.time + MED_LINGER;
+        const danger = this.attacked || dist < MED_DANGER || (this.medHid && !this.sightBlocked && dist < MED_SEEN);
+        if (danger && !this.medRolled) {
+          this.medRolled = true;
+          if (Math.random() < S.medCancel) {
+            p.cancelAction();
+            this.medCancels++;
+            this.medT = rand(MED_RETRY[0], MED_RETRY[1]);
+            return false;
+          }
+        }
+        return true;
+      }
+      // A reload on the way doesn't use up its time behind the cover it came for.
+      if (this.cover && this.cover.med && (p.reloading || p.reloadAgain || this.reloadSlot != null)) this.cover.until = Math.max(this.cover.until, world.time + MED_LINGER);
+      if (this.nade || (this.medT -= dt) > 0) return false;
+      this.medT = rand(MED_EVERY[0], MED_EVERY[1]);
+      if (this.mode !== 'hold' || this.fightMelee() || this.shield || this.attacked || p.cur >= 2 || p.reloading || p.reloadAgain || this.reloadSlot != null || p.bursts.length || p.cooking) return false;
+      const hidden = this.sightBlocked, item = this.medItem(hidden);
+      if (!item || Math.random() >= S.medCare) return false;
+      // Out in the open it goes for cover first, if there's any to reach and it hasn't just tried.
+      if (!hidden && world.field && !this.o.still && !this.cover && world.time > this.medNoTrip && Math.random() < S.coverCare) {
+        this.startCover(false);
+        if (this.cover) {
+          this.cover.med = true;
+          this.cover.until = world.time + COVER_TRIP;
+          this.medNoTrip = this.cover.until + MED_TRIP_GAP;
+          return false;
+        }
+      }
+      if (!hidden && this.cover) return false;   // on its way
+      if (hidden || (this.quietT > S.sneakQuiet && dist > SNEAK_FAR)) {
+        if (!p.useItem(item)) return false;
+        this.medRolled = false; this.medHid = hidden; this.meds++;
+        this.spraying = false; this.qsT = null;
+        return true;
+      }
+      this.backOff(dist);
+      return false;
+    }
+
     // Flushes you out with a grenade when you've been out of sight a while, or now and then when you're reloading.
     // True while a throw is under way, which is when its hands are full. It has to cook and throw like you do.
     grenadeThinking(dist, dt) {
@@ -593,9 +668,9 @@
       }
       if (p.nades <= 0 || (this.nadeT -= dt) > 0) return false;
       this.nadeT = rand(NADE_EVERY[0], NADE_EVERY[1]);
-      if (this.mode !== 'hold' || this.fightMelee() || this.cover || this.shield || p.action || p.reloadAgain || this.reloadSlot != null || p.bursts.length || p.throwCooldown > 0 || p.cur >= 2) return false;
+      if (this.mode !== 'hold' || this.fightMelee() || this.cover || this.shield || p.reloading || p.reloadAgain || this.reloadSlot != null || p.bursts.length || p.throwCooldown > 0 || p.cur >= 2) return false;
       const hidden = this.noSightT > S.nadeHide;
-      if (!hidden && !t.action) return false;
+      if (!hidden && !t.reloading) return false;
       if (Math.random() >= S.nadeCare * (hidden ? 1 : NADE_READS)) return false;
       const spot = this.nadeSpot();
       if (!spot) return false;
@@ -663,7 +738,7 @@
     // to break it, and what's left in both guns has to be enough to still finish you.
     canBreak(f) {
       const p = this.p, t = this.t, d = p.activeDef, S = this.S;
-      if (d.kind !== 'gun' || p.action) return false;
+      if (d.kind !== 'gun' || p.reloading) return false;
       const list = f.blockers(p.pos, t.pos);
       if (list.length !== 1) return false;
       const o = list[0];
@@ -714,13 +789,13 @@
       if (p.cur === 2 || this.mode !== 'hold' || this.fightMelee()) { this.cover = null; this.wasReloading = false; return; }
       const w = p.slots[p.cur], d = p.activeDef;
       if (d.kind !== 'gun') return;
-      const reloading = !!(p.action || p.reloadAgain);
+      const reloading = !!(p.reloading || p.reloadAgain);
       if (!reloading) this.sneak = false;
       if (f && !this.o.still) {
         if (reloading && !this.wasReloading && !this.cover && this.timeToFire() > COVER_MIN_RELOAD && Math.random() < S.coverCare) this.startCover(false);
         if (this.cover) {
           const c = this.cover, s = c.o.dead ? null : this.coverSpot(c.o), there = s && Math.hypot(s.x - p.pos.x, s.y - p.pos.y) < COVER_ARRIVED;
-          if (!s || (c.peek ? (world.time > c.until && !reloading) || d.fireMode !== 'burst'
+          if (!s || (c.med ? world.time > c.until : c.peek ? (world.time > c.until && !reloading) || d.fireMode !== 'burst'
             : c.trip ? world.time > c.until : !reloading && !this.reloadSlot)) {
             if (c.peek) this.peekT = rand(PEEK_EVERY[0], PEEK_EVERY[1]);
             this.cover = null;
@@ -747,9 +822,9 @@
       }
       if ((this.sneakT -= dt) > 0) return;
       this.sneakT = rand(SNEAK_EVERY[0], SNEAK_EVERY[1]);
-      if (reloading || this.breaking || p.bursts.length) return;
+      if (reloading || this.breaking || p.bursts.length || p.action) return;
       const full = w.ammo / d.maxClip;
-      const hidden = this.sightBlocked, reads = S.sneakReads && !!t.action;
+      const hidden = this.sightBlocked, reads = S.sneakReads && !!t.reloading;
       const calm = this.quietT > S.sneakQuiet && dist > SNEAK_FAR && !this.spraying && this.qsT == null;
       const quiet = calm && full <= S.sneakAt * SNEAK_IN_VIEW;
       const safe = hidden || reads || quiet || (S.sneakReads && this.panWait) || this.shield;
@@ -792,7 +867,7 @@
     // Hide, step out to one side, fire a burst or two, step back, and repeat.
     peekStep(dt) {
       const p = this.p, c = this.cover, w = p.slots[p.cur], d = p.activeDef, hide = this.coverSpot(c.o);
-      if (p.action || p.reloadAgain) { c.out = false; return hide; }
+      if (p.reloading || p.reloadAgain) { c.out = false; return hide; }
       c.t -= dt;
       if (!c.out) {
         if (c.t > 0 || !this.sightBlocked) return hide;
@@ -858,7 +933,7 @@
           this.shieldPeek = false; this.spraying = false;
           this.shieldPeekIn = rand(S.shieldHold[0], S.shieldHold[1]);
         }
-      } else if ((this.shieldPeekIn -= dt) <= 0 && w.ammo > 0 && !p.action && this.timeToFire() <= PAN_TURN / S.track) {
+      } else if ((this.shieldPeekIn -= dt) <= 0 && w.ammo > 0 && !p.reloading && this.timeToFire() <= PAN_TURN / S.track) {
         this.shieldPeek = true; this.shieldPeekT = SHIELD_PEEK_MAX; this.shieldAmmo = w.ammo;
       }
     }
@@ -1053,8 +1128,9 @@
       const v = this.dirIdx >= 0 ? DIRS[this.dirIdx] : { x: 0, y: 0 };
       i.right = v.x > 0.3; i.left = v.x < -0.3; i.down = v.y > 0.3; i.up = v.y < -0.3;
 
-      const throwing = this.o.fire && this.grenadeThinking(dist, dt);
-      if (this.o.fire && !throwing) { this.meleeThinking(dist, dt); this.gunSwitching(dt, dist); }
+      const using = this.o.fire && this.medThinking(dist, dt);
+      const throwing = this.o.fire && !using && this.grenadeThinking(dist, dt);
+      if (this.o.fire && !throwing && !using) { this.meleeThinking(dist, dt); this.gunSwitching(dt, dist); }
 
       // ---- aim: predict where you'll be when the bullet arrives ----
       // your actual velocity this tick; the bot only adapts to it after its reaction time
@@ -1076,7 +1152,7 @@
         ay = t.pos.y + this.vEst.y * tt * this.lead;
       }
       let want = throwing ? this.nadeThrowAngle() : Math.atan2(ay - p.pos.y, ax - p.pos.x);
-      const cover = this.o.fire && !throwing ? this.panCover(dist) : null;
+      const cover = this.o.fire && !throwing && !using ? this.panCover(dist) : null;
       if (cover != null) { want += cover; this.spraying = false; }
       let diff = want - this.aimAng;
       while (diff > Math.PI) diff -= 2 * Math.PI;
@@ -1097,12 +1173,12 @@
           if (!p.cooking) i.shootStart = true;
           i.shootHold = p.cookT < n.cook && dist >= NADE_NEAR / 2;   // lets go early if you've run up to it
         }
-      } else if (this.o.fire && !t.dead) {
+      } else if (this.o.fire && !using && !t.dead) {
         const inRange = d.kind === 'gun' ? dist < d.bullet.distance * 0.9 : dist < this.meleeReach() - MELEE_SWING;
         const onTarget = Math.abs(diff) < Math.max(0.05, Math.atan2(t.rad * 1.5, dist));
         const isAuto = d.kind === 'gun' && (d.fireMode === 'auto' || d.fireMode === 'burst');
         const ammo = p.slots[p.cur].ammo;
-        const midReload = d.kind === 'gun' && (p.action || p.reloadAgain || this.reloadSlot === p.cur) && ammo < this.enoughAmmo(d) && dist >= RELOAD_INTERRUPT
+        const midReload = d.kind === 'gun' && (p.reloading || p.reloadAgain || this.reloadSlot === p.cur) && ammo < this.enoughAmmo(d) && dist >= RELOAD_INTERRUPT
           // Part-empty, in view: under direct attack it fires back, which ends the reload, and a sneaked
           // shell-by-shell reload never delays a ready shot.
           && !(ammo > 0 && !this.sightBlocked && (this.attacked || (this.sneak && d.maxReload < d.maxClip)));

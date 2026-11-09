@@ -250,6 +250,7 @@
   const scope = { key: 'scope', label: 'SCOPE', default: '1xscope', preview: pvView,
     options: SCOPES.map((v) => ({ v, label: v.replace('scope', '').toUpperCase() + ` (${RADII[v]})` })) };
   const NADE_COUNT = 3;
+  const RESPAWN_SAFE = 1;                        // s you can't be hurt after losing a life
   const nadeOptions = [{ v: 'on', label: 'ON' }, { v: 'off', label: 'OFF' }];
   const nadeText = (who) => pvText((p) => (p.v === 'on' ? [`${who} ${NADE_COUNT} FRAG GRENADES`, 'THEY RECHARGE AFTER A KILL.', 'HOLD TO COOK, 4S FUSE.'] : ['NO GRENADES'])) ;
   const myNadesSetting = { key: 'myNades', label: 'YOUR GRENADES', default: 'on', preview: nadeText('YOU GET'), options: nadeOptions };
@@ -265,7 +266,7 @@
     return {
       distance: cfg.botRange, view, rush: cfg.rush || 'never',
       movement: cfg.botMove === 'still' ? 'strafe' : cfg.botMove || 'strafe', still: cfg.botMove === 'still',
-      fire, skill: cfg.skill,
+      fire, skill: cfg.skill, items: cfg.botItems === 'on',
       dodge: cfg.dodge === 'on', dodgeReact: (cfg.dodgeReact || 150) / 1000,
     };
   }
@@ -364,7 +365,7 @@
     me.setGrenades(myNades);
     const preload = [me.slots[0].type, me.slots[1].type, me.slots[2].type, cfg.botMelee, ...BOT_GUNS].map(SV.defOf).filter(Boolean);
     const F = SV.FRAG;
-    SV.preload([F.loot, F.worldImg.sprite, F.burst.image, F.decal.sprite, ...Object.values(F.handImg).flatMap((h) => [h.left && h.left.sprite, h.right && h.right.sprite])]);
+    SV.preload([...Object.values(SV.ITEMS).map((i) => i.loot), 'map-stone-01', 'part-log-01', F.loot, F.worldImg.sprite, F.burst.image, F.decal.sprite, ...Object.values(F.handImg).flatMap((h) => [h.left && h.left.sprite, h.right && h.right.sprite])]);
     SV.preload(['player-base-01', 'player-hands-01', 'player-bullet-trail-02', ...preload.flatMap((d) => [d.loot, d.world && d.world.sprite, d.world && d.world.magImg && d.world.magImg.sprite])]);
 
     // Anywhere you can currently see, so a bigger scope means a wider spread. Measured in pixels so it
@@ -434,17 +435,20 @@
       // A finger came down during the round. True if it pressed a button rather than a stick.
       touchPress(x, y) {
         const { W, H } = api.size;
-        if (this.scopeClick(x, y)) return true;
+        if (this.uiClick(x, y)) return true;
         const b = SV.touchButton(W, H, x, y, me.activeDef.kind === 'gun', me.nades > 0);
         if (b === null) return false;
         if (b === 'reload') me.requestReload(); else me.switchTo(b);
         return true;
       },
-      scopeClick(x, y) {
+      // A press on the scope row or an item is only that, and never a shot.
+      uiClick(x, y) {
         const { W, H } = api.size;
         const hit = SV.scopeAt(W, H, !!touch, SCOPES, scope, x, y);
-        if (!hit) return false;
-        if (hit !== scope) setScope(hit);
+        if (hit) { if (hit !== scope) setScope(hit); return true; }
+        const item = SV.itemAt(W, H, !!touch, x, y);
+        if (!item) return false;
+        if (world.time > 0) me.useItem(item);
         return true;
       },
       wheel(dir) { wheelDir = dir; },
@@ -465,6 +469,8 @@
             me.dead = false; me.health = C.player.health; me.boost = cfg.myBoost || 0;
             me.setGrenades(myNades);           // a new life, and a kill for the bot: both have their grenades again
             if (bot && !bot.dead) bot.setGrenades(botNades);
+            world.clearShots();
+            me.safeT = RESPAWN_SAFE;
             api.loseLife();
           }
         }
@@ -481,6 +487,7 @@
         else if (a === 'grenade') me.switchTo(3);
         else if (a === 'swap') me.swapKey();
         else if (a === 'reload') me.requestReload();
+        else if (SV.ITEMS[a]) me.useItem(a);
         else if (a === 'nextScope') stepScope(1);
         else if (a === 'prevScope') stepScope(-1);
         return !!a;
@@ -489,14 +496,14 @@
         const { W, H } = api.size;
         SV.drawWorld(g, W, H, world, me.pos, shownZoom, { popups: cfg.popups === 'on' ? popupsArr : null });
         if (touch) touch.drawAimLine(g, W, H, me, shownZoom, viewPpu(W, H, shownZoom));
-        const left = api.timeLeft != null ? `TIME ${Math.max(0, api.timeLeft).toFixed(1)}` : `TIME ${world.time.toFixed(1)}`;
+        const left = api.timeLeft != null ? `TIME ${Math.max(0, api.timeLeft).toFixed(1)}` : `LIVES ${api.lives}`;
         SV.drawHud(g, W, H, me, {
           keyLabels: keyLabels(), time: world.time, scopes: SCOPES, scope, mouse: api.mouse,
           topLeft: left,
           topRight: kind === '1v1' ? `KILLS ${st.kills}  DEATHS ${st.deaths}` : `DMG ${Math.round(st.dmg)}`,
           bot, timeline: kind === 'range' || cfg.timeline === 'on' ? timeline : null, touch: !!touch,
           boxes: [
-            { label: 'Time', value: Math.ceil(Math.max(0, api.timeLeft != null ? api.timeLeft : world.time)) },
+            api.timeLeft != null ? { label: 'Time', value: Math.ceil(Math.max(0, api.timeLeft)) } : { label: 'Lives', value: api.lives },
             kind === '1v1' ? { label: 'Kills', value: st.kills, side: 'left' } : { label: 'Damage', value: Math.round(st.dmg), side: 'left' },
             ...(kind === '1v1' ? [{ label: 'Deaths', value: st.deaths, side: 'right' }] : []),
           ],
@@ -508,7 +515,7 @@
         const avg = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
         const rows = [
           ['DAMAGE', Math.round(st.dmg)],
-          ['KILLS', st.kills],
+          ...(kind === '1v1' ? [] : [['KILLS', st.kills]]),   // 1v1's headline number
           ['ACCURACY', AT.pct(st.hits, st.shots)],
           ['HEADSHOTS', st.heads],
           ['AVG TIME TO KILL', st.ttk.length ? avg(st.ttk).toFixed(2) + 'S' : '—'],
@@ -520,6 +527,7 @@
         if (kind === '1v1') rows.push(['DEATHS', st.deaths], ['DAMAGE TAKEN', Math.round(st.taken)]);
         if (me.slots[2].type === 'pan') rows.push(['SHOTS REFLECTED', st.reflects]);
         Object.entries(st.byWeapon).forEach(([n, w]) => rows.push([n.toUpperCase() + ' HITS', `${w.hits}/${w.shots}`]));
+        if (kind === '1v1') return { score: st.kills, scoreLabel: st.kills === 1 ? 'KILL' : 'KILLS', rows };
         return { score: Math.round(st.dmg) + st.kills * 100 - st.deaths * 100, rows };
       },
     };
@@ -542,8 +550,8 @@
     id: 'sv-1v1',
     group: 'survev',
     name: '1V1',
-    description: 'Move and fight a strafing bot that keeps changing its range at random and sometimes rushes you into melee, and it fights back.',
-    simple: ['primary', 'secondary', 'melee', 'myNades', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'botNades', 'obstacles', 'scope', 'duration'],
+    description: 'Fight a bot that strafes, changes its range, heals behind cover and fights back. How many kills can you get before you run out of lives?',
+    simple: ['primary', 'secondary', 'melee', 'myNades', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'botNades', 'obstacles', 'scope', 'end', 'duration'],
     settings: [
       ...loadout(),
       myNadesSetting,
@@ -560,6 +568,9 @@
       { key: 'botGun2', label: 'BOT SECOND WEAPON', type: 'weapon', pick: 'gun', default: 'mosin', allowNone: true, only: BOT_GUNS },
       { key: 'botMelee', label: 'BOT MELEE', type: 'weapon', pick: 'melee', default: 'pan' },
       botNadesSetting,
+      { key: 'botItems', label: 'BOT USES ITEMS', default: 'on',
+        preview: pvText((p) => (p.v === 'on' ? ['HEALS AND DRINKS', 'BEHIND COVER IF IT CAN,', 'AND STOPS IF IT GETS ATTACKED.'] : ['NO ITEMS', 'IT ONLY HAS ITS ADRENALINE.'])),
+        options: [{ v: 'on', label: 'ON' }, { v: 'off', label: 'OFF' }] },
       { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
         preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
@@ -568,7 +579,11 @@
       { ...scope, default: '4xscope' },
       infAmmo,
       popups,
-      { key: 'duration', label: 'DURATION', default: 120, preview: AT.pv.duration,
+      { key: 'end', label: 'PLAY UNTIL', default: 'lives', preview: AT.pv.endCond,
+        options: [{ v: 'lives', label: 'LIVES RUN OUT' }, { v: 'time', label: 'TIME RUNS OUT' }] },
+      { key: 'lives', label: 'LIVES', default: 5, when: (c) => c.end === 'lives', preview: AT.pv.lives,
+        options: [1, 3, 5, 10, 20].map((v) => ({ v, label: String(v) })) },
+      { key: 'duration', label: 'DURATION', default: 120, when: (c) => c.end === 'time', preview: AT.pv.duration,
         options: [60, 120, 180].map((v) => ({ v, label: v + 'S' })) },
     ],
     create: (cfg, api) => createGame(cfg, api, '1v1'),

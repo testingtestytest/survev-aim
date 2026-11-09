@@ -11,6 +11,10 @@
     { id: 'grenade', label: 'GRENADE', def: ['Digit4'] },
     { id: 'swap', label: 'SWAP WEAPONS', def: ['Space'] },
     { id: 'reload', label: 'RELOAD', def: ['KeyR'] },
+    { id: 'bandage', label: 'USE BANDAGE', def: ['Digit7'] },
+    { id: 'healthkit', label: 'USE MED KIT', def: ['Digit8'] },
+    { id: 'soda', label: 'USE SODA', def: ['Digit9'] },
+    { id: 'painkiller', label: 'USE PILLS', def: ['Digit0'] },
     { id: 'nextScope', label: 'NEXT SCOPE', def: [] },
     { id: 'prevScope', label: 'PREVIOUS SCOPE', def: [] },
   ];
