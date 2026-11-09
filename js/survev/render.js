@@ -520,7 +520,7 @@
     if (d.kind !== 'gun') return;
     const ammo = me.slots[me.cur].ammo, c = L.clip, r = L.remain, sh = { touch: 1, desk: 2 }[L.touch ? 'touch' : 'desk'];
     rbox(g, c.x, c.y, c.w, c.h, 5, 'rgba(0,0,0,0.4)');
-    mid(g, String(ammo), c.x + c.w / 2, c.y + c.h / 2, c.size, { color: ammo > 0 ? '#fff' : '#ff0000', sh });
+    mid(g, me.infiniteAmmo ? '∞' : String(ammo), c.x + c.w / 2, c.y + c.h / 2, c.size, { color: ammo > 0 ? '#fff' : '#ff0000', sh });
     rbox(g, r.x, r.y, r.w, r.h, 5, 'rgba(0,0,0,0.4)');
     // The trainer's reserve ammo is infinite, which the game also shows as a symbol.
     mid(g, '∞', r.x + r.w / 2, r.y + r.h / 2, r.size, { sh });

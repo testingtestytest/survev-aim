@@ -23,6 +23,8 @@ The bot respawns at a random spot on your screen, at least 6 units from you, so 
 
 A rush ends when the bot reaches you. If you keep getting away, it gives up after about 2 seconds, plus extra time when it starts from further than 12 units.
 
+The bot gives ground as well as taking it. With a dynamic distance, better bots back off when they start a reload or get hurt. They also pick their moment for a melee charge: they wait until you can't shoot before they'd arrive, weave in on the diagonals with a pan held toward you, and call it off if you recover while they're still out of reach. Weaker bots run straight at a loaded gun.
+
 In 1v1 the bot carries an **AK-47 and Mosin** by default. You can change either, or leave out the second. It changes guns when one runs out, and alternates two guns with quickswitches after single shots. With a shotgun and another gun, it wants the shotgun closer than 10 units and the other gun beyond 14. Skill sets how often and how quickly it does all this, and whether it reloads both guns before fighting again. Guns that load shell by shell get a partial reload before it fires again, and better bots load more. The bot also sneaks in reloads with bullets left in the mag when it feels safe: when you can't see it, when you're far away and haven't fired lately, or (high and pro) when you're reloading. Better bots do this more often and with fuller mags. A shot of yours coming straight at it interrupts any reload that still has bullets in the mag, once it reacts, and it fires back.
 
 If your **pan faces the bot**, in your hand or on your back, it's reluctant to shoot, because the shots would come straight back. It waits for an opening, with an occasional shot, and fires as soon as you turn. Better bots hold back more reliably and use the wait to reload.
@@ -95,6 +97,9 @@ Survev modes open in **SIMPLE** settings with just the essentials. **FULL** show
 
 ## Sound
 Survev modes play the game's own sound effects, by the rules in survev's `client/src/audioManager.ts` and `client/src/lib/createJS.ts`: shots, bolts and pumps, reloads, weapon swaps, melee swings and hits, bullet hits, pan deflections, rock and tree hits and breaks, footsteps, and bullets passing close. Sounds fade with distance over the game's 48 units and sit in the ear they came from. Each round only loads the sounds its weapons need. **SOUND VOLUME** is under **KEYBINDS AND SETTINGS**. Standard modes are silent.
+
+## Infinite bullets
+**INFINITE BULLETS** is under each survev mode's full settings: **OFF**, **YOU**, or **YOU AND BOT**. Mags never drop and nothing reloads, at each gun's real rate of fire. It's a training aid, off by default.
 
 ## Scopes and the mouse wheel
 The scope buttons at the top of the screen work as in the game: click one to change scope, and the view eases over. That click never fires your gun. The **SCOPE** setting is the one a round starts on, and **NEXT SCOPE** and **PREVIOUS SCOPE** can be bound to keys, unbound by default as in the game. Scrolling down picks the next weapon and scrolling up the previous one, wrapping around and skipping empty slots.

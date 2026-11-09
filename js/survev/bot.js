@@ -5,7 +5,7 @@
   const { rand } = SV.util;
   const C = SV.CONFIG;
   const DIRS = [...Array(8)].map((_, k) => ({ x: Math.cos((k * Math.PI) / 4), y: Math.sin((k * Math.PI) / 4) }));
-  const RUSH_GAP = { never: null, sometimes: [8, 14], often: [4, 7] };
+  const RUSH_GAP = { never: null, sometimes: [16, 28], often: [7, 12] };
 
   // Per skill level:
   //  Strafing   run: seconds before changing direction, stop: chance of standing still (an easy target),
@@ -18,7 +18,9 @@
   //             reloadBoth: reloads both guns before fighting again
   //  Close up   closeMelee: chance it goes to melee when you're super close, charge: chances per second
   //             it charges you with melee when you're close, gunSense: chance it acts on the right gun for
-  //             the range (shotgun close, the other gun far)
+  //             the range (shotgun close, the other gun far), chargeRead: chance it waits for an opening
+  //             before charging and calls a charge off if you recover, chargeWeave: chance it weaves on the way in
+  //  Backing off  reloadBack: chance it gives ground when it starts a reload, hurtBack: chance it does when hurt
   //  Reloading  reloadTo: share of a shell-by-shell gun's mag it loads before firing again
   //  Breaking   breakCare: chance it thinks of shooting out the obstacle you're behind, spare: how much of
   //             your health it wants to be able to deal afterward (0 = doesn't count its bullets)
@@ -36,10 +38,10 @@
   //  Obstacles  replan: seconds between path updates, seekAfter: seconds without seeing you before it goes
   //             looking, losCare: chance it holds fire instead of shooting an obstacle in the way
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1] },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2] },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4] },
-    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6] },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1], chargeRead: 0.1,  chargeWeave: 0,   reloadBack: 0.15, hurtBack: 0.2 },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2], chargeRead: 0.45, chargeWeave: 0.3, reloadBack: 0.4,  hurtBack: 0.5 },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4], chargeRead: 0.85, chargeWeave: 0.8, reloadBack: 0.75, hurtBack: 0.8 },
+    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6], chargeRead: 0.95, chargeWeave: 1,   reloadBack: 0.95, hurtBack: 1 },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -66,6 +68,13 @@
   const FISTS_REACH = 3.25;
   const CHARGE_TIME = [1.2, 2.2];     // s before it gives up a charge
   const CHARGE_LOW_HP = 4;            // extra charge rate at 0 health, fading to none at full health
+  const CHARGE_OPENING = 10;          // how much likelier a charge is while you can't shoot
+  const CHARGE_SPEED = 10;            // units/s it can count on closing during a charge
+  const CHARGE_SLACK = 0.15;          // s you may be ready before it arrives and it still counts as an opening
+  const CHARGE_RECOVER = 2;           // units short of reach where it still calls off a charge you've recovered from
+  const BACK_OFF = [17, 24];          // where it heads when it gives ground
+  const BACK_OFF_FROM = 18;           // it's already far enough beyond this
+  const HURT_AT = 0.55;               // share of its health where it thinks about backing off
   const RELOAD_INTERRUPT = 6;         // closer than this it fires whatever it has loaded, mid-reload or not
   // Turning the pan toward you while it can't shoot.
   const PAN_TURN = 3;                 // turning takes about this many "track" time constants
@@ -202,6 +211,9 @@
       this.quietT = 0;                    // how long since you last had a shot in the air
       this.sneaks = 0;                    // stats, used by the tests
       this.coverUses = 0;
+      this.chargeReads = false;           // this charge watches for you recovering
+      this.chargeWeaves = false;
+      this.hurtRolled = false;
       this.panCovering = false;
       this.panRolled = false;
       this.panOff = 0;
@@ -244,6 +256,12 @@
       if (this.dynamic) this.setGoal(rand(DYN.afterFight[0], DYN.afterFight[1]));
     }
 
+    // Gives ground while it can't fight well: reloading, or hurt.
+    backOff(dist) {
+      if (!this.dynamic || this.mode !== 'hold' || dist > BACK_OFF_FROM) return;
+      this.setGoal(rand(BACK_OFF[0], BACK_OFF[1]));
+    }
+
     // If you back away, let you: settle at the range you opened up instead of following.
     letYouGo(dist, dt) {
       const t = this.t, p = this.p, d = dist || 1;
@@ -271,7 +289,9 @@
       // A rush or a dynamic range change heads fairly straight for where it's going.
       const moveTol = this.mode === 'rush' || (this.dynamic && this.mode === 'hold') ? 0.5 : 0.75;
       let want, tol = moveTol;               // desired radial component (+ away, - toward)
-      if (this.mode === 'rush' || (this.p.cur === 2 && this.fightMelee() && d > hi)) want = -0.9;
+      // A weaving charge takes the diagonals toward you, never the straight line.
+      if (this.charge && this.chargeWeaves && d > hi) { want = -0.65; tol = 0.3; }
+      else if (this.mode === 'rush' || (this.p.cur === 2 && this.fightMelee() && d > hi)) want = -0.9;
       else if (d > hi) want = -0.7;
       else if (d < lo) want = 0.7;
       else { want = 0; tol = this.S.tol; }   // in range: strafe across the line of fire
@@ -331,6 +351,15 @@
       };
       if (this.shield) return this.shieldPeek || dist < this.meleeReach() + MELEE_CLOSE ? null : panAngle();
       const turn = PAN_TURN / S.track, wait = this.timeToFire();
+      // On the way in with the pan out, it holds it toward you, and turns to swing just before it arrives.
+      if (this.charge && p.cur === 2) {
+        if (!this.panRolled) {
+          this.panRolled = true;
+          this.panCovering = Math.random() < S.panCare;
+          this.panOff = (gauss() * S.panErr * Math.PI) / 180;
+        }
+        return this.panCovering && dist > this.meleeReach() + CHARGE_SPEED * turn ? panAngle() : null;
+      }
       if (wait < turn || dist < this.meleeReach() + MELEE_CLOSE || this.sightBlocked || (p.cur === 2 && this.fightMelee())) {
         this.panCovering = this.panRolled = false;
         return null;
@@ -347,8 +376,29 @@
     // the first shell in, which cancels the reload and leaves it on an almost empty gun.
     enoughAmmo(d) { return d.maxReload >= d.maxClip ? d.maxClip : Math.ceil(d.maxClip * this.S.reloadTo); }
 
+    // How long until you could shoot it, with either gun: reloading, a shot's delay, or the swap to the other one.
+    youCanFireIn() {
+      const t = this.t;
+      if (!t.slots) return 0;
+      let best = Infinity;
+      [0, 1].forEach((k) => {
+        const s = t.slots[k], d = SV.defOf(s.type);
+        if (!d || d.kind !== 'gun' || s.ammo <= 0) return;
+        if (t.cur === k) best = Math.min(best, Math.max(0, s.cooldown));
+        else best = Math.min(best, t.freeSwitchTimer < 0 ? C.player.baseSwitchDelay : d.switchDelay);
+      });
+      if (best === Infinity) {                 // nothing loaded: however long the reload has left, or a guess at one
+        const d = t.activeDef;
+        return t.action ? t.action.duration - t.action.time : d && d.kind === 'gun' ? d.reloadTime : 1;
+      }
+      return t.action && t.cur < 2 && t.slots[t.cur].ammo <= 0 ? Math.max(best, 0.1) : best;
+    }
+    // You can't shoot before it gets there.
+    hasOpening(dist) { return this.youCanFireIn() + CHARGE_SLACK >= Math.max(0, dist - this.meleeReach()) / CHARGE_SPEED; }
+
     // Decides on melee: when you're super close, and sometimes a charge when you're close, more
-    // often the lower its health. A bot set to never rush doesn't charge.
+    // often the lower its health. A bot set to never rush doesn't charge. Better bots wait for an opening
+    // rather than running at a loaded gun, and call the charge off if you recover while they're still out of reach.
     meleeThinking(dist, dt) {
       const p = this.p, S = this.S;
       if (!p.slots[2].type) return;
@@ -363,10 +413,20 @@
         this.closeNext = this.closeFightT + MELEE_RETRY;
         if (go) this.meleeIn = rand(S.qsDelay[0], S.qsDelay[1]);
       }
+      if (this.charge && this.chargeReads && dist > reach + CHARGE_RECOVER && !this.hasOpening(dist)) {
+        this.endFight();
+        this.closeFightT = 0;
+        return;
+      }
       if (this.mode === 'hold' && this.o.rush !== 'never' && !(this.cover && !this.cover.peek) && dist >= close && dist < CHARGE_DIST + (reach - FISTS_REACH) * CHARGE_PER_REACH) {
         const hurt = 1 - Math.max(0, p.health) / C.player.health;
-        if (Math.random() < S.charge * (1 + CHARGE_LOW_HP * hurt) * dt) {
+        const reads = Math.random() < S.chargeRead, open = this.hasOpening(dist);
+        if (reads && !open) return;            // waits
+        if (Math.random() < S.charge * (1 + CHARGE_LOW_HP * hurt) * (open ? CHARGE_OPENING : 1) * dt) {
           this.charge = true; this.charges++;
+          this.chargeReads = Math.random() < S.chargeRead;
+          this.chargeWeaves = Math.random() < S.chargeWeave;
+          this.panRolled = false;
           this.mode = 'rush'; this.dirT = 0;
           this.modeT = rand(CHARGE_TIME[0], CHARGE_TIME[1]);
           this.meleeIn = rand(S.qsDelay[0], S.qsDelay[1]);
@@ -570,6 +630,7 @@
           }
         }
       }
+      if (reloading && !this.wasReloading && !this.cover && !this.fightMelee() && Math.random() < S.reloadBack) this.backOff(dist);
       this.wasReloading = reloading;
       // A burst gun fights from behind something: see peekStep.
       if (f && !this.o.still && !this.cover && !reloading && d.fireMode === 'burst' && (this.peekT -= dt) <= 0) {
@@ -847,6 +908,10 @@
         else if ((this.modeT -= dt) <= 0) this.endFight();   // you got away
       }
       if (this.mode === 'brawl' && (this.modeT -= dt) <= 0) this.endFight();
+      if (!this.hurtRolled && p.health < C.player.health * HURT_AT) {
+        this.hurtRolled = true;
+        if (!this.charge && Math.random() < S.hurtBack) this.backOff(dist);
+      } else if (p.health >= C.player.health * HURT_AT) this.hurtRolled = false;
       if (this.dynamic && this.mode === 'hold') {
         this.goal = Math.max(DYN.range[0], Math.min(DYN.range[1], this.goal + this.goalDrift * dt));
         if ((this.goalT -= dt) <= 0) this.nextGoal();

@@ -249,6 +249,9 @@
     options: [{ v: 'off', label: 'OFF' }, { v: 'few', label: 'FEW' }, { v: 'normal', label: 'NORMAL' }, { v: 'many', label: 'MANY' }] };
   const scope = { key: 'scope', label: 'SCOPE', default: '1xscope', preview: pvView,
     options: SCOPES.map((v) => ({ v, label: v.replace('scope', '').toUpperCase() + ` (${RADII[v]})` })) };
+  const infAmmo = { key: 'infAmmo', label: 'INFINITE BULLETS', default: 'off',
+    preview: pvText((p) => (p.v === 'off' ? ['OFF', 'MAGS RUN OUT AND RELOAD', 'LIKE THE REAL GAME.'] : ['TRAINING AID', 'GUNS NEVER NEED A RELOAD', p.v === 'both' ? 'FOR YOU AND THE BOT.' : 'FOR YOU ONLY.'])),
+    options: [{ v: 'off', label: 'OFF' }, { v: 'you', label: 'YOU' }, { v: 'both', label: 'YOU AND BOT' }] };
   const popups = { key: 'popups', label: 'DAMAGE NUMBERS', default: 'on',
     preview: pvText(['TRAINING AID', 'NOT IN THE REAL GAME.', 'SHOWS DAMAGE PER HIT,', 'YELLOW = HEADSHOT.']),
     options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] };
@@ -345,7 +348,7 @@
       },
     };
 
-    const me = world.addPlayer(0, 0, { id: 'me', helmet: cfg.myHelmet || 0, chest: cfg.myVest || 0, boost: cfg.myBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: meEvents });
+    const me = world.addPlayer(0, 0, { id: 'me', helmet: cfg.myHelmet || 0, chest: cfg.myVest || 0, boost: cfg.myBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: meEvents, infiniteAmmo: cfg.infAmmo !== 'off' && !!cfg.infAmmo });
     world.audio = SV.Audio.begin(me, [cfg.primary, cfg.secondary, cfg.melee || 'fists', ...(kind === '1v1' ? [cfg.botGun, cfg.botGun2, cfg.botMelee] : ['fists'])]);
     SV.preload(C.armor.chestSkin.concat(C.armor.helmetSkin).filter(Boolean).flatMap((a) => [a.sprite, a.loot]));
     me.setLoadout(cfg.primary || '', cfg.secondary || '', cfg.melee || 'fists');
@@ -373,7 +376,7 @@
       if (bot) world.players = world.players.filter((p) => p !== bot);
       const at = spawnOffset();
       bot = world.addPlayer(me.pos.x + at.x, me.pos.y + at.y,
-        { id: 'bot', helmet: cfg.botHelmet || 0, chest: cfg.botVest || 0, boost: cfg.botBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: botEvents });
+        { id: 'bot', helmet: cfg.botHelmet || 0, chest: cfg.botVest || 0, boost: cfg.botBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: botEvents, infiniteAmmo: cfg.infAmmo === 'both' });
       const fire = kind === '1v1';
       bot.setLoadout(fire ? cfg.botGun : '', fire ? cfg.botGun2 || '' : '', (fire && cfg.botMelee) || 'fists');
       ai = new SV.Bot(bot, me, botOpts(cfg, kind === '1v1', () => {
@@ -542,6 +545,7 @@
       ...touchSettings(),
       { ...obstaclesSetting, default: 'normal' },
       { ...scope, default: '4xscope' },
+      infAmmo,
       popups,
       { key: 'duration', label: 'DURATION', default: 120, preview: AT.pv.duration,
         options: [60, 120, 180].map((v) => ({ v, label: v + 'S' })) },
@@ -566,6 +570,7 @@
       ...touchSettings(),
       obstaclesSetting,
       scope,
+      infAmmo,
       popups,
       { key: 'duration', label: 'DURATION', default: 60, preview: AT.pv.duration,
         options: [30, 60, 120].map((v) => ({ v, label: v + 'S' })) },

@@ -252,6 +252,7 @@
       this.visAnim = null;          // visual only: { name, mirror, t, cache } melee attack / deploy animation
       this.boost = opts.boost || 0; // adrenaline, 0-100
       this.boostDrain = opts.boostDrain !== false;
+      this.infiniteAmmo = !!opts.infiniteAmmo;
       this.events = opts.events || {};
       this.stepDist = 0;            // sound only, from here down
       this.swapSoundT = 0;
@@ -415,7 +416,7 @@
       const s = this.slots[this.cur], d = SV.defOf(s.type);
       if (!d || d.kind !== 'gun') return;
       const maxReload = type === 'alt' && d.maxReloadAlt ? d.maxReloadAlt : d.maxReload;
-      const space = d.maxClip - s.ammo;
+      const space = d.maxClip - s.ammo;   // nothing to do with infinite bullets: the clip never drops
       if (space <= 0) return;
       s.ammo += Math.min(maxReload, space);
       if (s.ammo < d.maxClip) this.reloadAgain = true;
@@ -569,7 +570,8 @@
       w.recoilTime = recoilTimeOf(d);
       this.shotSlowdownTimer = d.fireDelay;
       this.cancelAction();
-      w.ammo--;
+      if (this.infiniteAmmo) this.scheduledReload = false;
+      else w.ammo--;
       const A = this.world.audio;
       if (A) {                                // client shot.ts: the shot, then the bolt or pump on your own gun
         const mine = A.me === this;
