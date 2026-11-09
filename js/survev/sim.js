@@ -822,9 +822,17 @@
     addProjectile(owner, pos, vel, fuse) {
       const F = SV.FRAG;
       this.projectiles.push({
-        owner, pos: { ...pos }, vel, fuse, z: SPAWN_HEIGHT, velZ: F.throwPhysics.velZ, below: 0, rad: F.rad * 0.5,
+        owner, born: this.time, pos: { ...pos }, vel, fuse, z: SPAWN_HEIGHT, velZ: F.throwPhysics.velZ, below: 0, rad: F.rad * 0.5,
         rot: 0, rotVel: F.throwPhysics.spinVel, rotDrag: F.throwPhysics.spinDrag * rand(1, 2), landed: false, lastHit: null, dead: false,
       });
+    }
+
+    // Where a grenade will be when it goes off, if nothing's in its way: flying at full speed, then rolling to a stop.
+    grenadeEnd(q) {
+      const left = Math.max(0, q.fuse), h = Math.max(0, q.z - q.below);
+      const air = h > 0 || q.velZ > 0 ? (q.velZ + Math.sqrt(q.velZ * q.velZ + 2 * GRAVITY * h)) / GRAVITY : 0;
+      const t = left <= air ? left : air + (1 - Math.exp(-GROUND_DRAG * (left - air))) / GROUND_DRAG;
+      return { x: q.pos.x + q.vel.x * t, y: q.pos.y + q.vel.y * t };
     }
 
     // server projectile.ts update, and the sounds from client projectile.ts
