@@ -11,12 +11,20 @@
 
   // ---------- canvas ----------
   const canvas = $('#game');
-  const g = canvas.getContext('2d');
-  let W = 0, H = 0, dpr = 1;
+  const g = canvas.getContext('2d', { alpha: false });   // always fully painted, so the browser needn't blend it with the page
+  let W = 0, H = 0, dpr = 1, screenDpr = 1, blanked = false;
+  // How much of the screen's resolution the round is drawn at. HIGH is all of it. LOW is about 720p's worth of pixels,
+  // and AUTO starts at all of it and moves toward that only if the round runs slowly (see watchSpeed).
+  const RES_STEPS = [1, 0.8, 0.65, 0.5], LOW_PIXELS = 1280 * 720;
+  const res = { step: 0, locked: false, time: 0, frames: 0, before: 0 };
+  const lowScale = () => Math.min(1, Math.sqrt(LOW_PIXELS / (innerWidth * innerHeight * screenDpr * screenDpr)));
   function resize() {
-    dpr = window.devicePixelRatio || 1;
-    if (AT.touch) dpr = Math.min(dpr, 2);   // phones report up to 4x; drawing that many pixels only costs frame rate
+    screenDpr = window.devicePixelRatio || 1;
+    if (AT.touch) screenDpr = Math.min(screenDpr, 2);   // phones report up to 4x; drawing that many pixels only costs frame rate
+    const q = AT.prefs.graphics;
+    dpr = screenDpr * (q === 'high' ? 1 : q === 'low' ? lowScale() : Math.max(lowScale(), RES_STEPS[res.step]));
     W = innerWidth; H = innerHeight;
+    blanked = false;
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
     canvas.style.width = W + 'px';
@@ -89,10 +97,13 @@
     return cur;
   }
 
+  // Previews scrolled out of sight aren't drawn.
+  const previewSeen = new IntersectionObserver((seen) => seen.forEach((e) => { e.target.offScreen = !e.isIntersecting; }));
+
   // ---------- generic settings rows ----------
   function renderRows(box, settings, values, onChange, withPreview) {
     box.innerHTML = '';
-    if (withPreview) previews.length = 0;
+    if (withPreview) { previews.length = 0; previewSeen.disconnect(); }
     settings.forEach((s) => {
       const hasPv = withPreview && s.preview;
       const row = el('div', 'row' + (hasPv ? ' has-pv' : ''));
@@ -134,6 +145,7 @@
         const cv = el('canvas', 'pv' + (s.pvTall ? ' tall' : ''));
         row.appendChild(cv);
         previews.push({ s, cv, state: {} });
+        previewSeen.observe(cv);
       }
       box.appendChild(row);
     });
@@ -197,13 +209,14 @@
 
   function drawPreviews(dt) {
     previews.forEach((pv) => {
+      if (pv.cv.offScreen) return;
       const w = pv.cv.clientWidth, h = pv.cv.clientHeight;
       if (!w || !h) return;
-      if (pv.cv.width !== Math.round(w * dpr) || pv.cv.height !== Math.round(h * dpr)) {
-        pv.cv.width = Math.round(w * dpr); pv.cv.height = Math.round(h * dpr);
+      if (pv.cv.width !== Math.round(w * screenDpr) || pv.cv.height !== Math.round(h * screenDpr)) {
+        pv.cv.width = Math.round(w * screenDpr); pv.cv.height = Math.round(h * screenDpr);
       }
       const pg = pv.cv.getContext('2d');
-      pg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      pg.setTransform(screenDpr, 0, 0, screenDpr, 0, 0);
       pg.fillStyle = COLORS.bg; pg.fillRect(0, 0, w, h);
       pv.s.preview({ g: pg, w, h, v: cfg[pv.s.key], cfg, dt, s: pv.state });
     });
@@ -221,6 +234,7 @@
   function goMenu() {
     state = 'menu';
     game = null;
+    SV.Audio.stopAll();
     previews.length = 0;
     renderMenu();
     show('menu');
@@ -248,24 +262,41 @@
   function openBinds() {
     state = 'binds';
     capturing = null;
+    SV.Audio.prepare(['gun_switch_01']);    // the volume slider's test sound
     renderBinds();
     show('binds');
   }
   function renderBinds() {
     const prefs = $('#prefs-list');
     prefs.innerHTML = '';
-    [['blood', 'BLOOD IMPACTS'], ['fps', 'FPS COUNTER']].forEach(([key, label]) => {
+    const onOff = [['on', 'ON'], ['off', 'OFF']];
+    [['blood', 'BLOOD IMPACTS', onOff], ['fps', 'FPS COUNTER', onOff],
+      ['graphics', 'GRAPHICS', [['auto', 'AUTO'], ['high', 'HIGH'], ['low', 'LOW']]]].forEach(([key, label, choices]) => {
       const row = el('div', 'row');
       row.appendChild(el('div', 'label', label));
       const opts = el('div', 'opts');
-      [['on', 'ON'], ['off', 'OFF']].forEach(([v, text]) => {
+      choices.forEach(([v, text]) => {
         const b = el('button', 'opt' + (AT.prefs[key] === v ? ' sel' : ''), text);
-        b.onclick = () => { AT.setPref(key, v); renderBinds(); };
+        b.onclick = () => {
+          AT.setPref(key, v);
+          if (key === 'graphics') { Object.assign(res, { step: 0, locked: false, time: 0, frames: 0, before: 0 }); resize(); }
+          renderBinds();
+        };
         opts.appendChild(b);
       });
       row.appendChild(opts);
       prefs.appendChild(row);
     });
+    const vol = el('div', 'row');
+    const range = el('div', 'range');
+    const slider = el('input');
+    Object.assign(slider, { type: 'range', min: 0, max: 100, step: 5, value: AT.prefs.volume });
+    const shown = el('span', 'range-val', AT.prefs.volume + '%');
+    slider.oninput = () => { AT.setPref('volume', +slider.value); shown.textContent = slider.value + '%'; SV.Audio.setVolume(); };
+    slider.onchange = () => SV.Audio.play('gun_switch_01', 'activePlayer');
+    range.append(slider, shown);
+    vol.append(el('div', 'label', 'SOUND VOLUME'), range);
+    prefs.appendChild(vol);
     const box = $('#binds-list');
     box.innerHTML = '';
     AT.BIND_ACTIONS.forEach((a) => {
@@ -376,9 +407,11 @@
     fx.length = 0;
     previews.length = 0;
     keys.clear();
+    SV.Audio.stopAll();
     api.lives = cfg.end === 'lives' ? cfg.lives : Infinity;
     game = mode.create(cfg, api);
     countdown = 3;
+    countdownShown = null;
     state = 'countdown';
     show(null);
     $('#hud-mode').textContent = mode.name;
@@ -391,6 +424,7 @@
   function gameOver() {
     state = 'gameover';
     overT = 0.5;
+    SV.Audio.stopAll();
     const o = $('#gameover');
     o.textContent = timed() ? 'TIME' : 'OUT OF LIVES';
     o.classList.add('on');
@@ -424,7 +458,12 @@
   }
 
   // ---------- hud ----------
+  let hudShown = '';
   function updateHud() {
+    if (game.ownHud) return;                 // survev modes draw theirs on the canvas
+    const now = JSON.stringify([game.hud(), timed() ? Math.max(0, cfg.duration - elapsed).toFixed(1) : api.lives, cfg.lives]);
+    if (now === hudShown) return;            // rebuilding the page's elements every frame is slow
+    hudShown = now;
     const stats = $('#hud-stats');
     stats.innerHTML = '';
     game.hud().forEach(([k, v]) => {
@@ -469,16 +508,41 @@
   }
 
   // ---------- loop ----------
-  let last = performance.now();
+  // AUTO graphics: two slow stretches in a row in a round lower the resolution a step, so a passing hiccup doesn't. A step
+  // that didn't help is undone for good, because then something else is the limit, like a browser saving power.
+  const SLOW_FPS = 45, WATCH_TIME = 2, MUST_GAIN = 1.08;
+  function watchSpeed(gap) {
+    if (state !== 'playing' || AT.prefs.graphics !== 'auto' || gap > 0.25) { res.time = res.frames = 0; return; }
+    res.time += gap; res.frames++;
+    if (res.time < WATCH_TIME) return;
+    const fpsNow = res.frames / res.time;
+    res.time = res.frames = 0;
+    const wasSlow = res.slow || res.before > 0;
+    res.slow = fpsNow < SLOW_FPS;
+    if (res.before) {
+      const helped = fpsNow >= res.before * MUST_GAIN;
+      res.before = 0;
+      if (!helped) { res.step--; res.locked = true; resize(); return; }
+    }
+    if (!res.locked && res.slow && wasSlow && res.step + 1 < RES_STEPS.length && RES_STEPS[res.step] > lowScale()) {
+      res.before = fpsNow;
+      res.step++;
+      resize();
+    }
+  }
+
+  let last = performance.now(), countdownShown = null;
   function frame(now) {
     // now can be slightly before last on the first frame, and a negative step breaks anything timed
     const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+    watchSpeed((now - last) / 1000);
     last = now;
 
     if (state === 'countdown') {
       countdown -= dt;
-      if (countdown <= 0) { state = 'playing'; $('#countdown').textContent = ''; }
-      else $('#countdown').textContent = Math.ceil(countdown);
+      const shown = countdown <= 0 ? '' : Math.ceil(countdown);
+      if (shown !== countdownShown) { countdownShown = shown; $('#countdown').textContent = shown; }
+      if (countdown <= 0) state = 'playing';
     } else if (state === 'playing') {
       elapsed += dt;
       game.update(dt);
@@ -488,10 +552,14 @@
     }
 
     countFps(performance.now());
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.fillStyle = COLORS.bg;
-    g.fillRect(0, 0, W, H);
-    if (state === 'countdown' || state === 'playing' || state === 'gameover') {
+    const inRound = state === 'countdown' || state === 'playing' || state === 'gameover';
+    if (inRound || !blanked) {               // behind the menus the canvas only needs clearing once
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.fillStyle = COLORS.bg;
+      g.fillRect(0, 0, W, H);
+      blanked = !inRound;
+    }
+    if (inRound) {
       game.draw(g);
       drawFx(dt);
       drawFps();

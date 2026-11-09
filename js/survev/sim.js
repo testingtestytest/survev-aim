@@ -253,6 +253,10 @@
       this.boost = opts.boost || 0; // adrenaline, 0-100
       this.boostDrain = opts.boostDrain !== false;
       this.events = opts.events || {};
+      this.stepDist = 0;            // sound only, from here down
+      this.swapSoundT = 0;
+      this.actionSound = null;
+      this.cycleSound = null;
     }
 
     get active() { return this.slots[this.cur].type; }
@@ -331,6 +335,7 @@
       this.cur = idx;
       this.cancelAction();
       if (nd.kind === 'gun' && nextW.ammo <= 0) this.scheduledReload = true;
+      this.switchSound(curDef, nd, from, idx, curW);
       this.visAnim = null;
       if (nd.kind === 'melee' && nd.anim.deployAnims.length) {
         this.playVis(nd.anim.deployAnims[Math.floor(Math.random() * nd.anim.deployAnims.length)], false);
@@ -354,7 +359,24 @@
       return false;
     }
 
-    cancelAction() { this.action = null; }
+    // client player.ts: only your own swaps make a sound. A quick second gun swap, or a swap between two guns
+    // that share a deploy group right after firing, plays that gun's full deploy sound.
+    switchSound(curDef, nd, from, to, curW) {
+      const A = this.world.audio;
+      if (!A || A.me !== this) return;
+      if (nd.kind === 'melee') { A.play(nd.sound.deploy, 'sfx', this.pos, 3); return; }
+      const sameGroup = from !== 2 && to !== 2 && curW.cooldown > 0 && nd.deployGroup != null && nd.deployGroup === curDef.deployGroup;
+      let name = 'gun_switch_01';
+      if (this.swapSoundT > 0 || sameGroup) name = nd.sound.deploy;
+      else this.swapSoundT = C.player.freeSwitchCooldown;
+      A.stop(this.cycleSound);
+      this.cycleSound = A.play(name, 'activePlayer');
+    }
+
+    cancelAction() {
+      this.action = null;
+      if (this.actionSound) { this.world.audio.stop(this.actionSound); this.actionSound = null; }
+    }
 
     playVis(name, mirror) { this.visAnim = SV.ANIM.anims[name] ? { name, mirror, t: 0, cache: {} } : null; }
 
@@ -370,6 +392,11 @@
         duration = d.reloadTimeAlt; type = 'alt';
       }
       this.action = { type, time: 0, duration };
+      const A = this.world.audio;
+      if (A) {                                // client player.ts playActionStartEffect
+        A.stop(this.actionSound);
+        this.actionSound = A.play(type === 'alt' && d.sound.reloadAlt ? d.sound.reloadAlt : d.sound.reload, A.me === this ? 'activePlayer' : 'otherPlayers', this.pos, 2);
+      }
     }
 
     // weaponManager.reload
@@ -419,9 +446,13 @@
         this.health = Math.min(C.player.health, this.health + SV.boostHeal(this.boost) * dt);
         if (this.boostDrain) this.boost = Math.max(0, this.boost - C.player.boostDecay * dt);
       }
+      const A = this.world.audio;
+      this.swapSoundT -= dt;
       if (this.visAnim) {
+        const was = this.visAnim.t, def = SV.ANIM.anims[this.visAnim.name];
         this.visAnim.t += dt;
-        const fr = SV.ANIM.anims[this.visAnim.name].frames;
+        if (A) for (const [at, key] of def.sfx) if (at >= was && at < this.visAnim.t) A.play(this.activeDef.sound[key], 'sfx', this.pos, 3);   // client animPlaySound
+        const fr = def.frames;
         if (this.visAnim.t >= fr[fr.length - 1].time) this.visAnim = null;
       }
       // player.update: reloadAgain (shell-by-shell) schedules the next reload one tick later
@@ -462,6 +493,10 @@
           const nx = d > 1e-6 ? dx / d : 1, ny = d > 1e-6 ? dy / d : 0;
           this.pos.x += nx * (pen + 0.001); this.pos.y += ny * (pen + 0.001);
         }
+      }
+      if (A) {                                // client player.ts: a step every 4 units walked
+        this.stepDist += Math.hypot(this.pos.x - this.posOld.x, this.pos.y - this.posOld.y);
+        if (this.stepDist > 4) { this.stepDist = 0; A.group('footstep_grass', this.pos, 3); }
       }
 
       this.weaponUpdate(dt);
@@ -524,6 +559,15 @@
       this.shotSlowdownTimer = d.fireDelay;
       this.cancelAction();
       w.ammo--;
+      const A = this.world.audio;
+      if (A) {                                // client shot.ts: the shot, then the bolt or pump on your own gun
+        const mine = A.me === this;
+        A.play(w.ammo === 0 && d.sound.shootLast ? d.sound.shootLast : d.sound.shoot, mine ? 'activePlayer' : 'otherPlayers', this.pos, d.sound.fallOff);
+        if (mine && d.fireMode === 'single' && d.pullDelay) {
+          A.stop(this.cycleSound);
+          this.cycleSound = A.play(w.ammo > 0 ? d.sound.cycle : d.sound.pull, 'activePlayer');
+        }
+      }
 
       const dir = this.dir;
       const perp = { x: -dir.y, y: dir.x };
@@ -615,10 +659,13 @@
         hits.push({ p, pen, prio: 0 });
       }
       hits.sort((a, b) => (a.prio === b.prio ? b.pen - a.pen : a.prio - b.prio));
+      const A = this.world.audio;
       for (const h of d.cleave ? hits : hits.slice(0, 1)) {
-        if (h.o) { h.o.damage(d.damage * d.obstacleDamage); continue; }
+        if (h.o) { this.world.hitObstacle(h.o, d.damage * d.obstacleDamage, h.o.def.sound.punch); continue; }
         const p = h.p;
         {
+          // animData.ts: the saw's second hit has its own sound
+          if (A) A.play(d.sound.playerHit2 && this.meleeAttacks.length === 1 ? d.sound.playerHit2 : d.sound.playerHit, 'hits', p.pos);
           const res = p.damage(d.damage, d);
           if (res && this.events.hit) this.events.hit(this, p, res, d);
           // player.ts: melee blood stays at the target's position and drifts along the swing
@@ -635,7 +682,15 @@
       this.bullets = [];
       this.blood = [];
       this.field = null;     // obstacles, when the mode has them
+      this.audio = null;     // SV.Audio, when this world should be heard
       this.time = 0;
+    }
+    // client bullet.ts and obstacle.ts: the hit's sound, and the break's if that finished it
+    hitObstacle(o, amount, soundGroup) {
+      o.damage(amount);
+      if (!this.audio) return;
+      this.audio.group(soundGroup, o);
+      if (o.dead) this.audio.play(o.def.sound.explode, 'sfx', o);
     }
     addPlayer(x, y, opts) { const p = new Player(this, x, y, opts); this.players.push(p); return p; }
 
@@ -670,9 +725,13 @@
       this.time += dt;
       for (const p of this.players) p.update(dt);
       while (this.blood.length && this.time - this.blood[0].born > SV.BLOOD.life) this.blood.shift();
-      const bounced = [];
+      const bounced = [], A = this.audio;
       for (const b of this.bullets) {
         if (!b.alive) { if (b.collided) b.scale = Math.max(b.scale - dt * 6, 0); continue; }
+        if (A && !b.whizHeard && b.owner !== A.me && Math.hypot(b.pos.x - A.me.pos.x, b.pos.y - A.me.pos.y) < 7.5) {   // client bullet.ts
+          A.group('bullet_whiz', b.pos, 4);
+          b.whizHeard = true;
+        }
         const step = Math.min(b.distance - b.traveled, b.speed * dt);
         const nx = b.pos.x + b.dir.x * step, ny = b.pos.y + b.dir.y * step;
         // segment vs circle and pan, nearest hit. A reflected bullet can hit whoever fired it (damageSelf).
@@ -697,7 +756,7 @@
             b.pos.x += b.dir.x * obD; b.pos.y += b.dir.y * obD;
             let dmg = b.damage / (b.reflectCount + 1);
             if (C.bulletFalloff) dmg *= remap(clamp(b.traveled / b.distance, 0, 1), 0, 1, 1, b.falloff);
-            ob.damage(dmg * b.gunDef.bullet.obstacleDamage);
+            this.hitObstacle(ob, dmg * b.gunDef.bullet.obstacleDamage, ob.def.sound.bullet);
             b.alive = false;
             b.collided = true;
             continue;
@@ -712,6 +771,7 @@
             const dot = b.dir.x * pan.normal.x + b.dir.y * pan.normal.y;
             bounced.push({ b, pos: { ...b.pos }, dir: { x: b.dir.x - 2 * dot * pan.normal.x, y: b.dir.y - 2 * dot * pan.normal.y } });
           }
+          if (A) A.group(SV.MELEE.pan.sound.bullet, b.pos);
           if (panBy.events.reflect) panBy.events.reflect(panBy, b);
           continue;
         }
@@ -722,6 +782,7 @@
           if (C.bulletFalloff) dmg *= remap(clamp(b.traveled / b.distance, 0, 1), 0, 1, 1, b.falloff);
           // bullet.ts: bullet blood is attached to the player who was hit, at the point of impact
           this.blood.push({ on: hit, x: b.pos.x - hit.pos.x, y: b.pos.y - hit.pos.y, born: this.time });
+          if (A) A.group('player_bullet_hit', hit.pos, 1);
           const res = hit.damage(dmg, b.gunDef);
           if (res && b.owner.events.hit) b.owner.events.hit(b.owner, hit, res, b.gunDef, b.shotId);
           b.alive = false;

@@ -339,6 +339,7 @@
     };
 
     const me = world.addPlayer(0, 0, { id: 'me', helmet: cfg.myHelmet || 0, chest: cfg.myVest || 0, boost: cfg.myBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: meEvents });
+    world.audio = SV.Audio.begin(me, [cfg.primary, cfg.secondary, cfg.melee || 'fists', ...(kind === '1v1' ? [cfg.botGun, cfg.botGun2, cfg.botMelee] : ['fists'])]);
     SV.preload(C.armor.chestSkin.concat(C.armor.helmetSkin).filter(Boolean).flatMap((a) => [a.sprite, a.loot]));
     me.setLoadout(cfg.primary || '', cfg.secondary || '', cfg.melee || 'fists');
     const preload = [me.slots[0].type, me.slots[1].type, me.slots[2].type, cfg.botMelee, ...BOT_GUNS].map(SV.defOf).filter(Boolean);

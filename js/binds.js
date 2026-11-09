@@ -24,7 +24,10 @@
   }
   AT.binds = load();
   // Options that aren't keys. They apply everywhere and live on the same screen.
-  AT.prefs = { blood: AT.store.get('blood', 'on'), fps: AT.store.get('fps', 'on') };
+  AT.prefs = {
+    blood: AT.store.get('blood', 'on'), fps: AT.store.get('fps', 'on'),
+    graphics: AT.store.get('graphics', 'auto'), volume: AT.store.get('volume', 100),
+  };
   AT.setPref = (k, v) => { AT.prefs[k] = v; AT.store.set(k, v); };
   AT.saveBinds = () => AT.store.set('binds', AT.binds);
   AT.resetBinds = () => { AT.store.set('binds', null); AT.binds = load(); };

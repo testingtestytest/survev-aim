@@ -6,7 +6,7 @@
   const GRID = 16;                         // GameConfig.map.gridSize
   const SKIN = 0xf8c574;                   // outfitBase baseTint / handTint
   const FONT = '"Roboto Condensed", "Arial Narrow", Arial, sans-serif';
-  const K = 4;                             // supersampling for tinted sprite bitmaps
+  const MAX_LEVEL = 4, MIN_LEVEL = -12;    // sprite bitmap sizes, in half doublings of the sprite's own size: 4x down to 1/64
 
   // Bones, as in client animData.ts: body-local px (16px = 1 unit). Each pose is { pivot, rot, pos }.
   const HAND_L = 0, HAND_R = 1, MELEE_R = 5;
@@ -68,43 +68,32 @@
     return imgs[name];
   };
   const tintCache = {};
-  // Tinted, supersampled bitmap of an SVG sprite (PIXI-style multiply tint).
   function tinted(name, tint) {
     const key = name + ':' + tint;
     if (tintCache[key]) return tintCache[key];
     const im = SV.img(name);
     if (!im.complete || !im.naturalWidth) return null;
-    const w = im.naturalWidth, h = im.naturalHeight;
-    const c = document.createElement('canvas');
-    c.width = Math.ceil(w * K); c.height = Math.ceil(h * K);
-    const x = c.getContext('2d');
-    x.drawImage(im, 0, 0, c.width, c.height);
-    if (tint !== 0xffffff) {
-      x.globalCompositeOperation = 'multiply';
-      x.fillStyle = '#' + tint.toString(16).padStart(6, '0');
-      x.fillRect(0, 0, c.width, c.height);
-      x.globalCompositeOperation = 'destination-in';
-      x.drawImage(im, 0, 0, c.width, c.height);
-    }
-    c.srcW = w; c.srcH = h;
-    c.mips = shrinkSteps(c);
-    tintCache[key] = c;
-    return c;
+    return (tintCache[key] = { im, tint, srcW: im.naturalWidth, srcH: im.naturalHeight, levels: {} });
   }
-  // The same bitmap at half size, a quarter, and so on, each made from the last. Shrinking a lot in one
-  // step skips pixels and leaves jagged edges, so drawing starts from the copy nearest the on-screen size.
-  function shrinkSteps(c) {
-    const out = [c];
-    for (let last = c; last.width > 8 && last.height > 8;) {
-      const n = document.createElement('canvas');
-      n.width = Math.ceil(last.width / 2); n.height = Math.ceil(last.height / 2);
-      const x = n.getContext('2d');
-      x.imageSmoothingQuality = 'high';
-      x.drawImage(last, 0, 0, n.width, n.height);
-      out.push(n);
-      last = n;
+  // The sprite drawn from its SVG, tinted PIXI-style. Sizes are made the first time they're wanted, so only the ones in
+  // use take memory. It's made one size bigger than the screen needs, so plain smoothing, which is quick to draw, always
+  // shrinks it by between 1.4 and 2 times. Measured against a perfect reference, that's about as smooth as the much
+  // slower high quality smoothing, while a bitmap at nearly the on-screen size has visibly rougher edges when rotated.
+  function bitmapAt(c, scale) {
+    const level = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, Math.ceil(Math.log2(scale) * 2) + 1));
+    if (c.levels[level]) return c.levels[level];
+    const size = 2 ** (level / 2), w = Math.max(1, Math.ceil(c.srcW * size)), h = Math.max(1, Math.ceil(c.srcH * size));
+    const off = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+    const x = off.getContext('2d');
+    x.drawImage(c.im, 0, 0, w, h);
+    if (c.tint !== 0xffffff) {
+      x.globalCompositeOperation = 'multiply';
+      x.fillStyle = '#' + c.tint.toString(16).padStart(6, '0');
+      x.fillRect(0, 0, w, h);
+      x.globalCompositeOperation = 'destination-in';
+      x.drawImage(c.im, 0, 0, w, h);
     }
-    return out;
+    return (c.levels[level] = off.transferToImageBitmap ? off.transferToImageBitmap() : off);
   }
   SV.preload = (names) => names.forEach((n) => n && SV.img(n));
   const hex = (n, a = 1) => `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
@@ -114,13 +103,16 @@
     const c = tinted(name, tint);
     if (!c) return;
     const w = c.srcW * sx, h = c.srcH * sy;
-    // real pixels this will cover, then the smallest copy that's still at least that big
-    const m = g.getTransform();
-    const need = Math.max((Math.abs(w) * Math.hypot(m.a, m.b)) / c.width, (Math.abs(h) * Math.hypot(m.c, m.d)) / c.height);
-    let level = 0;
-    while (level + 1 < c.mips.length && need <= 0.5 ** (level + 1)) level++;
-    g.imageSmoothingQuality = 'high';
-    g.drawImage(c.mips[level], -w * ax, -h * ay, w, h);
+    const m = g.getTransform();             // real pixels per pixel of the SVG
+    g.drawImage(bitmapAt(c, Math.max(Math.abs(sx) * Math.hypot(m.a, m.b), Math.abs(sy) * Math.hypot(m.c, m.d))), -w * ax, -h * ay, w, h);
+  }
+  // A HUD picture filling a w by h box centered on (x, y).
+  function icon(g, name, x, y, w, h) {
+    const c = tinted(name, 0xffffff);
+    if (!c) return;
+    g.translate(x, y);
+    sprite(g, name, 0xffffff, 0.5, 0.5, w / c.srcW, h / c.srcH);
+    g.translate(-x, -y);
   }
 
   function drawGun(g, d) {
@@ -206,13 +198,15 @@
   // client/src/objects/obstacle.ts: the sprite scales with the obstacle, and its layer decides whether it's
   // under players (rocks, zIdx 10) or over them (trees, zIdx 800). What's left of a dead one is 75% opaque.
   const PLAYER_Z = 18;
-  function drawObstacles(g, list, over, X, Y, S) {
+  function drawObstacles(g, list, over, X, Y, S, W, H) {
     const mine = list.filter((o) => (o.def.img.zIdx > PLAYER_Z) === over).sort((a, b) => a.scale - b.scale);
     for (const o of mine) {
-      const img = o.def.img, s = o.scale * img.scale;
+      const img = o.def.img, s = o.scale * img.scale, sx = X(o.x), sy = Y(o.y);
+      const c = tinted(img.sprite, 0xffffff), half = c ? (c.srcW / 2) * s * S : 0;
+      if (sx + half < 0 || sx - half > W || sy + half < 0 || sy - half > H) continue;   // off screen
       g.save();
       g.globalAlpha = o.dead ? 0.75 : 1;
-      g.translate(X(o.x), Y(o.y));
+      g.translate(sx, sy);
       g.rotate(o.rot);
       g.scale(S, S);
       sprite(g, o.dead ? img.residue : img.sprite, 0xffffff, 0.5, 0.5, s, s);
@@ -269,7 +263,7 @@
     g.stroke();
 
     const obstacles = world.field ? world.field.near(cam.x, cam.y, Math.hypot(W, H) / 2 / ppu + 8) : [];
-    drawObstacles(g, obstacles, false, X, Y, S);
+    drawObstacles(g, obstacles, false, X, Y, S, W, H);
     for (const p of world.players) if (!p.dead) drawPlayer(g, p, X(p.pos.x), Y(p.pos.y), S);
     if (!AT.prefs || AT.prefs.blood !== 'off') drawBlood(g, world, X, Y, S);
 
@@ -294,7 +288,7 @@
       g.restore();
     }
 
-    drawObstacles(g, obstacles, true, X, Y, S);
+    drawObstacles(g, obstacles, true, X, Y, S, W, H);
 
     // optional training feedback: floating damage numbers
     if (extras.popups) {
@@ -430,15 +424,12 @@
       g.save();
       g.globalAlpha = anim.alpha[k];
       if (sel) rbox(g, x, y, w, h, 5, 'rgba(0,0,0,0.4)');
-      const im = SV.img(d.loot);
-      if (im.complete && im.naturalWidth) {
-        g.save();
-        g.translate(x + L.imgLeft + L.img / 2, y + h / 2);
-        g.rotate(d.lootRot || 0);
-        if (d.lootMirror) g.scale(-1, 1);
-        g.drawImage(im, -L.img / 2, -L.img / 2, L.img, L.img);
-        g.restore();
-      }
+      g.save();
+      g.translate(x + L.imgLeft + L.img / 2, y + h / 2);
+      g.rotate(d.lootRot || 0);
+      if (d.lootMirror) g.scale(-1, 1);
+      icon(g, d.loot, 0, 0, L.img, L.img);
+      g.restore();
       g.font = `700 ${L.name.size}px ${FONT}`;
       const name = d.name, room = w - L.imgLeft - L.img * 0.7 - L.name.right;
       const size = L.name.size * Math.min(1, room / g.measureText(name).width);
@@ -499,8 +490,7 @@
       g.save();
       g.globalAlpha = A.alpha;
       rbox(g, x, y, A.w, A.h, 5, 'rgba(0,0,0,0.4)');
-      const im = SV.img(skin.loot);
-      if (im.complete && im.naturalWidth) g.drawImage(im, x + (A.w - A.img) / 2, y + (A.h - A.img) / 2, A.img, A.img);
+      icon(g, skin.loot, x + A.w / 2, y + A.h / 2, A.img, A.img);
       g.restore();
       if (A.level) text(g, `Lvl. ${lvl}`, x + A.w / 2, y - 6, A.level, { align: 'center' });
     });
@@ -517,8 +507,7 @@
     mid(g, '∞', r.x + r.w / 2, r.y + r.h / 2, r.size, { sh });
     if (L.reload) {
       rbox(g, L.reload.x - L.reload.r, L.reload.y - L.reload.r, L.reload.r * 2, L.reload.r * 2, L.reload.r, 'rgba(0,0,0,0.4)');
-      const im = SV.img('bullets');
-      if (im.complete && im.naturalWidth) g.drawImage(im, L.reload.x - 7, L.reload.y - 7, 14, 14);
+      icon(g, 'bullets', L.reload.x, L.reload.y, 14, 14);
     }
   }
 
@@ -529,8 +518,8 @@
     g.save();
     g.translate(W / 2, P.y);
     g.scale(P.s, P.s);
-    const im = SV.img('timer-background');
-    if (im.complete && im.naturalWidth) g.drawImage(im, -im.naturalWidth / 2, -im.naturalHeight / 2);
+    const pie = tinted('timer-background', 0xffffff);
+    if (pie) icon(g, 'timer-background', 0, 0, pie.srcW, pie.srcH);
     g.strokeStyle = '#fff'; g.lineWidth = 6;
     g.beginPath(); g.arc(0, 0, 35, -Math.PI / 2, (elapsed / dur) * Math.PI * 2 - Math.PI / 2); g.stroke();
     mid(g, Math.max(0, dur - elapsed).toFixed(1), 0, 0, 24, { shadow: false });
