@@ -344,6 +344,14 @@
       return true;
     }
 
+    // player.ts EquipNextWeap / EquipPrevWeap: the next filled slot, wrapping around.
+    cycleWeapon(dir) {
+      const n = this.slots.length;
+      let idx = this.cur;
+      do { idx = (idx + dir + n) % n; } while (!this.slots[idx].type);
+      return this.switchTo(idx);
+    }
+
     // Space bind, per the user's rules.
     swapKey() {
       const hasP = !!this.slots[0].type, hasS = !!this.slots[1].type;
@@ -379,6 +387,9 @@
     }
 
     playVis(name, mirror) { this.visAnim = SV.ANIM.anims[name] ? { name, mirror, t: 0, cache: {} } : null; }
+
+    // player.ts Input.Reload: pressing reload only asks for one. It starts once the gun's fire or switch delay is over.
+    requestReload() { this.scheduledReload = true; }
 
     // weaponManager.tryReload (reserve ammo treated as infinite)
     tryReload() {

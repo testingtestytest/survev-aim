@@ -533,8 +533,10 @@
 
   let last = performance.now(), countdownShown = null;
   function frame(now) {
-    // now can be slightly before last on the first frame, and a negative step breaks anything timed
-    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+    // now can be slightly before last on the first frame, and a negative step breaks anything timed. The limit is for
+    // long gaps like a hidden tab. Survev modes allow more, because below it the round runs in slow motion, and reloads
+    // and swaps that are meant to be practised by feel would take longer than they do in the game.
+    const dt = Math.max(0, Math.min(mode && mode.group === 'survev' ? 0.25 : 0.05, (now - last) / 1000));
     watchSpeed((now - last) / 1000);
     last = now;
 
@@ -578,11 +580,14 @@
   addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
   canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
-    mouse.down = true;
     mouse.x = e.clientX; mouse.y = e.clientY;
+    // A click on a scope button is only that. Holding the button down here mustn't count as holding the trigger.
+    if ((state === 'playing' || state === 'countdown') && game.scopeClick && game.scopeClick(e.clientX, e.clientY)) return;
+    mouse.down = true;
     if (state === 'playing') game.mousedown(e.clientX, e.clientY);
   });
   addEventListener('mouseup', (e) => { if (e.button === 0) mouse.down = false; });
+  addEventListener('wheel', (e) => { if (state === 'playing' && game.wheel && e.deltaY) game.wheel(e.deltaY > 0 ? 1 : -1); }, { passive: true });
   addEventListener('blur', () => { mouse.down = false; keys.clear(); });
   addEventListener('contextmenu', (e) => { if (state === 'playing' || state === 'countdown') e.preventDefault(); });
   addEventListener('keyup', (e) => keys.delete(e.code));

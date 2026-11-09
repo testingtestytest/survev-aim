@@ -96,6 +96,9 @@ Survev modes open in **SIMPLE** settings with just the essentials. **FULL** show
 ## Sound
 Survev modes play the game's own sound effects, by the rules in survev's `client/src/audioManager.ts` and `client/src/lib/createJS.ts`: shots, bolts and pumps, reloads, weapon swaps, melee swings and hits, bullet hits, pan deflections, rock and tree hits and breaks, footsteps, and bullets passing close. Sounds fade with distance over the game's 48 units and sit in the ear they came from. Each round only loads the sounds its weapons need. **SOUND VOLUME** is under **KEYBINDS AND SETTINGS**. Standard modes are silent.
 
+## Scopes and the mouse wheel
+The scope buttons at the top of the screen work as in the game: click one to change scope, and the view eases over. That click never fires your gun. The **SCOPE** setting is the one a round starts on, and **NEXT SCOPE** and **PREVIOUS SCOPE** can be bound to keys, unbound by default as in the game. Scrolling down picks the next weapon and scrolling up the previous one, wrapping around and skipping empty slots.
+
 ## Graphics
 **GRAPHICS** under **KEYBINDS AND SETTINGS** sets the resolution a round is drawn at:
 - **AUTO**, the default, starts at full resolution and lowers it a step at a time if a round stays under 45 FPS. A step that doesn't help is undone, in case the browser itself is limiting the frame rate.

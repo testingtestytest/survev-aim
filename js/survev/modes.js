@@ -266,7 +266,14 @@
   function createGame(cfg, api, kind) {
     const world = new SV.World();
     if (OBSTACLE_AMOUNT[cfg.obstacles]) world.field = new SV.ObstacleField(OBSTACLE_AMOUNT[cfg.obstacles]);
-    const zoom = RADII[cfg.scope];
+    // The setting is the scope a round starts on. It can be changed during the round, and the view eases over.
+    let scope = cfg.scope, zoom = RADII[scope], shownZoom = zoom, wheelDir = 0;
+    function setScope(next) {
+      scope = next;
+      zoom = RADII[next];
+      if (world.time === 0) shownZoom = zoom;  // still counting down: nothing to ease from
+    }
+    const stepScope = (dir) => { const next = SCOPES[SCOPES.indexOf(scope) + dir]; if (next) setScope(next); };   // player.ts: stops at the ends
     const timeline = [];
     const popupsArr = [];
     const st = { shots: 0, hits: 0, heads: 0, dmg: 0, kills: 0, ttk: [], switches: 0, free: 0, deaths: 0, taken: 0, reflects: 0,
@@ -408,12 +415,25 @@
       // A finger came down during the round. True if it pressed a button rather than a stick.
       touchPress(x, y) {
         const { W, H } = api.size;
+        if (this.scopeClick(x, y)) return true;
         const b = SV.touchButton(W, H, x, y, me.activeDef.kind === 'gun');
         if (b === null) return false;
-        if (b === 'reload') me.tryReload(); else me.switchTo(b);
+        if (b === 'reload') me.requestReload(); else me.switchTo(b);
         return true;
       },
+      scopeClick(x, y) {
+        const { W, H } = api.size;
+        const hit = SV.scopeAt(W, H, !!touch, SCOPES, scope, x, y);
+        if (!hit) return false;
+        if (hit !== scope) setScope(hit);
+        return true;
+      },
+      wheel(dir) { wheelDir = dir; },
       update(dt) {
+        // game.ts: the wheel counts once per update however far it's spun, and the camera eases toward the scope
+        if (wheelDir) { me.cycleWeapon(wheelDir); wheelDir = 0; }
+        const want = 1 / zoom, now = 1 / shownZoom;
+        shownZoom = 1 / (now + (want - now) * Math.min(1, dt * (want > now ? 2 : 1.4)));
         acc += dt;
         while (acc >= STEP) {
           acc -= STEP;
@@ -438,16 +458,18 @@
         else if (a === 'secondary') me.switchTo(1);
         else if (a === 'melee') me.switchTo(2);
         else if (a === 'swap') me.swapKey();
-        else if (a === 'reload') me.tryReload();
+        else if (a === 'reload') me.requestReload();
+        else if (a === 'nextScope') stepScope(1);
+        else if (a === 'prevScope') stepScope(-1);
         return !!a;
       },
       draw(g) {
         const { W, H } = api.size;
-        SV.drawWorld(g, W, H, world, me.pos, zoom, { popups: cfg.popups === 'on' ? popupsArr : null });
-        if (touch) touch.drawAimLine(g, W, H, me, zoom, viewPpu(W, H, zoom));
+        SV.drawWorld(g, W, H, world, me.pos, shownZoom, { popups: cfg.popups === 'on' ? popupsArr : null });
+        if (touch) touch.drawAimLine(g, W, H, me, shownZoom, viewPpu(W, H, shownZoom));
         const left = api.timeLeft != null ? `TIME ${Math.max(0, api.timeLeft).toFixed(1)}` : `TIME ${world.time.toFixed(1)}`;
         SV.drawHud(g, W, H, me, {
-          keyLabels: keyLabels(), time: world.time, scope: cfg.scope.replace('scope', ''),
+          keyLabels: keyLabels(), time: world.time, scopes: SCOPES, scope, mouse: api.mouse,
           topLeft: left,
           topRight: kind === '1v1' ? `KILLS ${st.kills}  DEATHS ${st.deaths}` : `DMG ${Math.round(st.dmg)}`,
           bot, timeline: kind === 'range' || cfg.timeline === 'on' ? timeline : null, touch: !!touch,

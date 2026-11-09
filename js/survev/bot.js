@@ -456,8 +456,10 @@
         return;
       }
       const cost = p.freeSwitchTimer < 0 ? C.player.baseSwitchDelay : SV.defOf(o.type).switchDelay;
+      // Behind the pan it waits out a single-shot gun's delay rather than changing to something that would spray.
+      const keepSingle = this.shield && d.fireMode === 'single' && od && od.fireMode !== 'single';
       if (this.qsT != null && (this.qsT -= dt) <= 0) {
-        if (o.ammo <= 0 || p.bursts.length) { this.qsT = null; return; }
+        if (o.ammo <= 0 || p.bursts.length || keepSingle) { this.qsT = null; return; }
         // A careful bot waits for the free switch if it isn't worth paying full price yet.
         if (!S.qsCare || cost < w.cooldown + CARE_SLACK) {
           this.qsT = null; this.spraying = false;
@@ -469,7 +471,7 @@
       }
       if ((this.senseT -= dt) <= 0) {
         this.senseT = rand(SENSE_EVERY[0], SENSE_EVERY[1]);
-        if (this.preferredSlot(dist) === other && o.ammo > 0 && !p.action && !p.bursts.length && this.reloadSlot == null
+        if (this.preferredSlot(dist) === other && !keepSingle && o.ammo > 0 && !p.action && !p.bursts.length && this.reloadSlot == null
             && (!S.qsCare || cost <= Math.max(w.cooldown, C.player.baseSwitchDelay)) && Math.random() < S.gunSense) {
           this.qsT = null; this.spraying = false;
           p.switchTo(other);
@@ -562,9 +564,9 @@
             if (c.peek) this.peekT = rand(PEEK_EVERY[0], PEEK_EVERY[1]);
             this.cover = null;
           }
-          else if (c.trip && there) {
+          else if (c.trip && there && w.cooldown <= 0) {
             this.cover = null;
-            if (w.ammo < d.maxClip) { this.sneak = true; this.sneaks++; this.qsT = null; this.spraying = false; p.tryReload(); }
+            if (w.ammo < d.maxClip) { this.sneak = true; this.sneaks++; this.qsT = null; this.spraying = false; p.requestReload(); }
           }
         }
       }
@@ -596,9 +598,9 @@
         p.switchTo(other);
         return;
       }
-      if (w.ammo > 0 && w.ammo < d.maxClip && full <= S.sneakAt && safe && Math.random() < S.sneakCare) {
+      if (w.cooldown <= 0 && w.ammo > 0 && w.ammo < d.maxClip && full <= S.sneakAt && safe && Math.random() < S.sneakCare) {
         this.qsT = null; this.spraying = false; this.sneak = true; this.sneaks++;
-        p.tryReload();
+        p.requestReload();
         return;
       }
       // Topped up and still hidden: the other gun's turn.
@@ -949,7 +951,8 @@
           } else if (hasAmmo && p.slots[p.cur].cooldown < 0) { i.shootStart = true; this.fireT = rand(0.05, 0.25); }
         }
         const twoGuns = p.cur < 2 && p.slots[1 - p.cur].type;
-        if (d.kind === 'gun' && ((ammo === 0 && !twoGuns) || (this.reloadSlot === p.cur && ammo < this.enoughAmmo(d) && !(this.attacked && ammo > 0)))) p.tryReload();
+        // Like a player's reload, this can't start until the gun's fire or switch delay is over.
+        if (d.kind === 'gun' && p.slots[p.cur].cooldown <= 0 && ((ammo === 0 && !twoGuns) || (this.reloadSlot === p.cur && ammo < this.enoughAmmo(d) && !(this.attacked && ammo > 0)))) p.requestReload();
       }
     }
   }

@@ -10,6 +10,8 @@
     { id: 'melee', label: 'MELEE', def: ['Digit3', 'KeyE'] },
     { id: 'swap', label: 'SWAP WEAPONS', def: ['Space'] },
     { id: 'reload', label: 'RELOAD', def: ['KeyR'] },
+    { id: 'nextScope', label: 'NEXT SCOPE', def: [] },
+    { id: 'prevScope', label: 'PREVIOUS SCOPE', def: [] },
   ];
 
   function load() {

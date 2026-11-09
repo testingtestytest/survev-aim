@@ -332,6 +332,7 @@
 
   // HUD layout from survev's client/css/game.css, in CSS pixels: desktop rules, the (max-height: 768px),
   // (max-width: 1200px) shrink, and the phone rules. Shared with touch hit testing so they can't disagree.
+  const T_HIT_MARGIN = 5;              // tap area beyond the visible slot; the next slot starts 7px away
   function hudLayout(W, H, touch) {
     if (touch) {
       const clipY = H - 78 - 32;
@@ -346,7 +347,7 @@
         remain: { x: W / 2 + 34.5, y: clipY + 10, w: 44, h: 22, size: 16 },
         reload: { x: W / 2 + 92.5, y: clipY + 21, r: 11 },
         armor: { x: W < H ? 30 : W * 0.7, bottom: W < H ? 9 : 6, w: 20, h: 24, img: 18, alpha: 0.75, level: false },
-        scope: { y: 6, r: 21, size: 24, append: 24 },
+        scope: { y: 6, r: 21, size: 24, append: 24, gap: 8, idle: 0.6, idleAlpha: 0.3, hit: T_HIT_MARGIN },
         pie: { y: H / 3 + (W > H ? 25 : 100), s: 0.5 },
       };
     }
@@ -363,11 +364,28 @@
       clip: { x: W / 2 - 50, y: clipY, w: 100, h: 50, size: 44 },
       remain: { x: W / 2 + 56, y: clipY + 18, w: 65, h: 32, size: 24 },
       armor: { x: W * (armorBig ? 0.71 : 0.73), bottom: 12, w: 48 * sa, h: 60 * sa, img: 36 * sa, alpha: 1, level: 16 * sa },
-      scope: { y: 12, r: 32 * s, size: 32 * s, append: 24 * s },
+      scope: { y: 12, r: 32 * s, size: 32 * s, append: 24 * s, gap: 8 * s, idle: 0.5, idleAlpha: 0.6, hit: 2 },
       pie: { y: H / 3, s: 1 },
     };
   }
-  const T_HIT_MARGIN = 5;              // tap area beyond the visible slot; the next slot starts 7px away
+  // #ui-top-center-scopes: a centered row where the scope in use is full size and the others are smaller and overlap
+  // its margins. on[k] is how far each one has grown, from 0 to 1. Returns each button's center and radius.
+  function scopeRow(W, S, on) {
+    const widths = on.map((v) => S.r * 2 - S.gap * 2 * (1 - v));
+    let x = W / 2 - widths.reduce((a, b) => a + b, 0) / 2;
+    return on.map((v, k) => {
+      const q = S.idle + (1 - S.idle) * v, cx = x + widths[k] / 2;
+      x += widths[k];
+      return { cx, cy: S.y + S.r, r: S.r * q, q, v };
+    });
+  }
+  // Which scope is at this point of the screen, or null.
+  SV.scopeAt = (W, H, touch, scopes, cur, x, y) => {
+    const S = hudLayout(W, H, touch).scope;
+    const row = scopeRow(W, S, scopes.map((n) => (n === cur ? 1 : 0)));
+    const k = row.findIndex((b) => Math.hypot(x - b.cx, y - b.cy) <= b.r + S.hit);
+    return k < 0 ? null : scopes[k];
+  };
   SV.touchLayout = (W, H) => {
     const L = hudLayout(W, H, true);
     return { ...L, slots: L.slotY.map((y) => ({ x: L.slotX - L.slotW, y, w: L.slotW, h: L.slotH })) };
@@ -401,10 +419,11 @@
   }
 
   // Slot widths and opacity animate as in ui2.ts; the grey "lost health" bar trails over 1s as in game.css.
-  const anim = { t: null, wide: [0, 0, 0], alpha: [0.6, 0.6, 0.6], ghost: 100 };
+  const anim = { t: null, dt: 0, wide: [0, 0, 0], alpha: [0.6, 0.6, 0.6], ghost: 100, scopeOn: null };
   function stepAnim(me, time, touch) {
     const dt = anim.t == null || time < anim.t ? 1 : Math.min(1, time - anim.t);
     anim.t = time;
+    anim.dt = dt;
     for (let k = 0; k < 3; k++) {
       const on = me.cur === k;
       const dw = (on ? 1 : 0) - anim.wide[k];
@@ -529,22 +548,37 @@
     g.restore();
   }
 
+  // The scope buttons (.ui-zoom). The one in use grows over 100ms, and the mouse brightens the others (.ui-zoom-inactive:hover).
+  const scopeText = {};                // measured once per label and size: this runs every frame
+  function drawScopes(g, W, L, info) {
+    const S = L.scope, on = anim.scopeOn && anim.scopeOn.length === info.scopes.length ? anim.scopeOn : (anim.scopeOn = info.scopes.map((n) => (n === info.scope ? 1 : 0)));
+    info.scopes.forEach((n, k) => { const d = (n === info.scope ? 1 : 0) - on[k]; on[k] += Math.sign(d) * Math.min(Math.abs(d), anim.dt / 0.1); });
+    scopeRow(W, S, on).forEach((b, k) => {
+      const num = info.scopes[k].replace('xscope', ''), key = num + ':' + S.size;
+      if (!scopeText[key]) {
+        g.font = `700 ${S.size}px ${FONT}`;
+        const m = g.measureText(num), nw = m.width;
+        g.font = `700 ${S.append}px ${FONT}`;
+        const ax = g.measureText('x').width;
+        scopeText[key] = { nw, left: -(nw + ax) / 2, drop: m.actualBoundingBoxAscent === undefined ? S.size * 0.35 : (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2 };
+      }
+      const t = scopeText[key], hover = info.mouse && !L.touch && Math.hypot(info.mouse.x - b.cx, info.mouse.y - b.cy) <= b.r;
+      g.save();
+      g.globalAlpha = hover ? 1 : S.idleAlpha + (1 - S.idleAlpha) * b.v;
+      g.translate(b.cx, b.cy);
+      g.scale(b.q, b.q);
+      g.fillStyle = 'rgba(0,0,0,0.3)';
+      g.beginPath(); g.arc(0, 0, S.r, 0, Math.PI * 2); g.fill();
+      text(g, num, t.left, t.drop, S.size, { shadow: false });
+      text(g, 'x', t.left + t.nw, t.drop, S.append, { shadow: false });
+      g.restore();
+    });
+  }
+
   const SIDE_BOX = { w: 64, h: 44, gap: 10 };   // kills and deaths, beside the bot's health
   function drawTop(g, W, me, L, info) {
-    // the current scope, top-center (.ui-zoom)
-    const S = L.scope, cx = W / 2, cy = S.y + S.r;
-    g.fillStyle = 'rgba(0,0,0,0.3)';
-    g.beginPath(); g.arc(cx, cy, S.r, 0, Math.PI * 2); g.fill();
-    const num = info.scope.replace('x', '');
-    g.font = `700 ${S.size}px ${FONT}`;
-    const nw = g.measureText(num).width;
-    g.font = `700 ${S.append}px ${FONT}`;
-    const ax = g.measureText('x').width, tx = cx - (nw + ax) / 2;
-    g.font = `700 ${S.size}px ${FONT}`;
-    const dm = g.measureText(num);
-    const base = dm.actualBoundingBoxAscent === undefined ? cy + S.size * 0.35 : cy + (dm.actualBoundingBoxAscent - dm.actualBoundingBoxDescent) / 2;
-    text(g, num, tx, base, S.size, { shadow: false });
-    text(g, 'x', tx + nw, base, S.append, { shadow: false });
+    drawScopes(g, W, L, info);
+    const S = L.scope;
 
     const s = L.sc * (L.touch ? 0.7 : 1), pad = L.touch ? 8 : 12;
     // Trainer additions: bot health under the scope, and speed where the game shows your team.
