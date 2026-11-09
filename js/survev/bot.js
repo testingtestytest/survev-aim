@@ -24,9 +24,11 @@
   //  Items      medCare: chance per check it does something about needing an item, medAt: health it heals below,
   //             boostAt: adrenaline it tops up below, medCancel: chance it stops using one when it's in danger
   //  Grenades   nadeCare: chance per check it throws one, nadeHide: seconds you've been out of sight before it thinks
-  //             of it, nadeAim: how far off it lands (units, std dev), nadeCook: how much of the fuse it burns off so
-  //             there's less time to run, nadeLead: how well it allows for its own movement, nadeFear: chance it
-  //             runs from a grenade near it
+  //             of it, nadeAim: how far off it lands (units, std dev), nadeFuse: seconds it leaves on the fuse so
+  //             there's less time to run, nadeLead: how well it allows for its own movement, nadePredict: how well it
+  //             allows for yours, nadeFlush: units past you it lands, so running from it brings you into the open,
+  //             nadeSave: chance it keeps the last for a good moment, nadeCamp: seconds you stand still before it
+  //             punishes it, nadeFear: chance it runs from a grenade near it
   //  Reloading  reloadTo: share of a shell-by-shell gun's mag it loads before firing again
   //  Breaking   breakCare: chance it thinks of shooting out the obstacle you're behind, spare: how much of
   //             your health it wants to be able to deal afterward (0 = doesn't count its bullets)
@@ -44,10 +46,10 @@
   //  Obstacles  replan: seconds between path updates, seekAfter: seconds without seeing you before it goes
   //             looking, losCare: chance it holds fire instead of shooting an obstacle in the way
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1], chargeRead: 0.1,  chargeWeave: 0,   reloadBack: 0.15, hurtBack: 0.2, nadeCare: 0.15, nadeHide: 3,   nadeAim: 5,   nadeCook: 0,    nadeLead: 0,   nadeFear: 0.55, medCare: 0.3,  medAt: 35, boostAt: 0,  medCancel: 0.3 },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2], chargeRead: 0.45, chargeWeave: 0.3, reloadBack: 0.4,  hurtBack: 0.5, nadeCare: 0.4,  nadeHide: 2,   nadeAim: 3,   nadeCook: 0.3,  nadeLead: 0.4, nadeFear: 0.8, medCare: 0.55, medAt: 50, boostAt: 20, medCancel: 0.6 },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4], chargeRead: 0.85, chargeWeave: 0.8, reloadBack: 0.75, hurtBack: 0.8, nadeCare: 0.75, nadeHide: 1.3, nadeAim: 1.6, nadeCook: 0.7,  nadeLead: 0.8, nadeFear: 0.95, medCare: 0.85, medAt: 65, boostAt: 40, medCancel: 0.9 },
-    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6], chargeRead: 0.95, chargeWeave: 1,   reloadBack: 0.95, hurtBack: 1, nadeCare: 1,    nadeHide: 0.8, nadeAim: 0.8, nadeCook: 0.95, nadeLead: 1,   nadeFear: 1, medCare: 1,    medAt: 75, boostAt: 55, medCancel: 1 },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1], chargeRead: 0.1,  chargeWeave: 0,   reloadBack: 0.15, hurtBack: 0.2, nadeCare: 0.15, nadeHide: 3,   nadeAim: 5,   nadeFuse: 3.9, nadePredict: 0, nadeFlush: 0, nadeSave: 0, nadeCamp: Infinity,    nadeLead: 0,   nadeFear: 0.55, medCare: 0.3,  medAt: 35, boostAt: 0,  medCancel: 0.3 },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2], chargeRead: 0.45, chargeWeave: 0.3, reloadBack: 0.4,  hurtBack: 0.5, nadeCare: 0.4,  nadeHide: 2,   nadeAim: 3,   nadeFuse: 2.6, nadePredict: 0.3, nadeFlush: 0.5, nadeSave: 0, nadeCamp: 3,  nadeLead: 0.4, nadeFear: 0.8, medCare: 0.55, medAt: 50, boostAt: 20, medCancel: 0.6 },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4], chargeRead: 0.85, chargeWeave: 0.8, reloadBack: 0.75, hurtBack: 0.8, nadeCare: 0.75, nadeHide: 1.3, nadeAim: 1.6, nadeFuse: 1.6, nadePredict: 0.7, nadeFlush: 1, nadeSave: 0.5, nadeCamp: 2,  nadeLead: 0.8, nadeFear: 0.95, medCare: 0.85, medAt: 65, boostAt: 40, medCancel: 0.9 },
+    pro:    { run: [0.12, 0.4], stop: 0.02, tol: 0.4,  shotErr: 0.5, react: 0.1,  leadErr: 0.08, track: 18, dodge: 0.95, qs: 1,    qsDelay: [0.03, 0.08], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6], chargeRead: 0.95, chargeWeave: 1,   reloadBack: 0.95, hurtBack: 1, nadeCare: 1,    nadeHide: 0.8, nadeAim: 0.8, nadeFuse: 1.05, nadePredict: 1, nadeFlush: 1.5, nadeSave: 1, nadeCamp: 1.2, nadeLead: 1,   nadeFear: 1, medCare: 1,    medAt: 75, boostAt: 55, medCancel: 1 },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -118,14 +120,24 @@
   // Throwing grenades.
   const NADE_EVERY = [0.4, 0.8];      // s between checks
   const NADE_GAP = [3, 5];            // s after a throw before another, to see what that one did
-  const NADE_NEAR = 8;                // closest it lands one to itself
+  const NADE_NEAR = 9;                // closest it lands one to itself
+  const NADE_OPEN_NEAR = 10;          // in the open its gun's better than this close
   const NADE_FAR = 28;                // furthest it can reach, which is about the most a throw travels
   const NADE_WAIT = [0.05, 0.2];      // s between having it in hand and pulling the pin
   const NADE_RINGS = [0, 2, 3.5, 5];  // units from you it'll land one, when your cover blocks your spot
   const NADE_AROUND = 12;             // directions tried on each ring
   const NADE_READS = 0.25;            // how much likelier a throw is when you're hidden than when you're just reloading
-  const NADE_MAX_COOK = 1.5;          // s it can burn off and still have it land first
-  const NADE_REST = 1.478;            // a throw travels this many seconds' worth of its speed: 1.043 in the air + 1/drag rolling
+  const NADE_AIR = 1.043;             // s a throw is in the air: velZ 5, gravity 10.5, from height 0.5
+  const NADE_DRAG = 2.3;              // projectile.ts, rolling on the ground
+  const NADE_LEAD_MAX = 8;            // units it'll lead you by: people turn
+  const NADE_CLEAR = 0.3;             // units of room it leaves around a tree on the way
+  const NADE_CLEAR_AIM = 0.2;         // and this much of its aim error on top, so a beginner's can still clip one and come back
+  const NADE_RETARGET = 0.1;          // s between updates to its aim while it cooks
+  const NADE_STEADY = 0.3;            // s before letting go that it holds its course: a turn would spoil the throw
+  const NADE_STILL_SPEED = 1;         // you moving slower than this counts as standing still
+  const NADE_HURT_AT = 0.5;           // you with less than this share of your health are worth one
+  const NADE_HURT_MULT = 1.5;
+  const NADE_LAST_WAIT = 3;           // the last one goes on someone hiding this many times longer than usual
   const NADE_RUN_FROM = 15;           // units from where it'll go off that it wants to be: past the blast, and most shrapnel
   const NADE_NOTICE = 3;              // reaction times after a throw before it's noticed where it's going
   // Using healing and adrenaline items.
@@ -246,6 +258,7 @@
       this.meds = 0;                      // stats, used by the tests
       this.medCancels = 0;
       this.fleeing = false;               // getting away from a grenade right now
+      this.youStillT = 0;                 // how long you've stood still
       this.nade = null;                   // a grenade throw in progress
       this.nadeT = 1.5;
       this.nadeThrows = 0;                // stats, used by the tests
@@ -579,17 +592,42 @@
       }
     }
 
-    // Somewhere to land a grenade that reaches you: your own spot, or as close as it can get with a clear throw from
-    // here and nothing between there and you that stops a blast. A low rock stops neither, so that's your spot.
-    nadeSpot() {
-      const p = this.p, t = this.t, f = p.world.field;
+    // How far a throw goes per unit of speed if it goes off T seconds after leaving the hand: flying, then rolling to a stop.
+    throwReach(T) { return T <= NADE_AIR ? T : NADE_AIR + (1 - Math.exp(-NADE_DRAG * (T - NADE_AIR))) / NADE_DRAG; }
+
+    // The fuse it wants left when it lets go: as little as it's good for, or as much as the distance needs.
+    fuseFor(d) {
+      const F = SV.FRAG;
+      let T = this.S.nadeFuse;
+      while (T < F.fuseTime && this.throwReach(T) * F.throwPhysics.speed < d) T += 0.05;
+      return Math.min(T, F.fuseTime);
+    }
+
+    // Where it wants a grenade with T seconds of fuse to go off: where you're heading, and just past you, so getting
+    // away from it brings you out toward its gun instead of further behind your cover.
+    nadeTarget(T) {
+      const p = this.p, t = this.t, S = this.S;
+      let lx = this.vEst.x * T * S.nadePredict, ly = this.vEst.y * T * S.nadePredict;
+      const l = Math.hypot(lx, ly);
+      if (l > NADE_LEAD_MAX) { lx *= NADE_LEAD_MAX / l; ly *= NADE_LEAD_MAX / l; }
+      const x = t.pos.x + lx, y = t.pos.y + ly, dx = x - p.pos.x, dy = y - p.pos.y, d = Math.hypot(dx, dy) || 1;
+      return { x: x + (dx / d) * S.nadeFlush, y: y + (dy / d) * S.nadeFlush };
+    }
+
+    // Somewhere to land it: that spot, or as near to you as it can get with a clear throw from here and nothing between
+    // there and you that stops a blast. A low rock stops neither. It leaves room around trees for how well it throws,
+    // because one that clips a tree bounces straight back.
+    nadeSpot(T) {
+      const p = this.p, t = this.t, f = p.world.field, c0 = this.nadeTarget(T), room = NADE_CLEAR + this.S.nadeAim * NADE_CLEAR_AIM;
       for (const r of NADE_RINGS) {
+        let best = null, bestD = Infinity;
         for (let k = 0; k < (r ? NADE_AROUND : 1); k++) {
-          const a = (k / NADE_AROUND) * Math.PI * 2, c = { x: t.pos.x + Math.cos(a) * r, y: t.pos.y + Math.sin(a) * r };
-          const d = Math.hypot(c.x - p.pos.x, c.y - p.pos.y);
-          if (d < NADE_NEAR || d > NADE_FAR) continue;
-          if (!f || (!f.tallBetween(p.pos, c) && !f.tallBetween(c, t.pos))) return c;
+          const a = (k / NADE_AROUND) * Math.PI * 2, c = { x: c0.x + Math.cos(a) * r, y: c0.y + Math.sin(a) * r };
+          const d = Math.hypot(c.x - p.pos.x, c.y - p.pos.y), you = Math.hypot(c.x - t.pos.x, c.y - t.pos.y);
+          if (d < NADE_NEAR || d > NADE_FAR || you >= bestD) continue;
+          if (!f || (!f.tallBetween(p.pos, c, room) && !f.tallBetween(c, t.pos))) { best = c; bestD = you; }
         }
+        if (best) return best;
       }
       return null;
     }
@@ -652,42 +690,67 @@
       return false;
     }
 
-    // Flushes you out with a grenade when you've been out of sight a while, or now and then when you're reloading.
-    // True while a throw is under way, which is when its hands are full. It has to cook and throw like you do.
+    // Is it worth one now? When you're out of sight for a while, or tied up reloading, healing or standing still. It
+    // doesn't start one under fire, or with its own still to go off, and better bots keep the last for a good moment.
+    nadeWorthIt(dist) {
+      const p = this.p, t = this.t, S = this.S, world = p.world;
+      if (this.attacked || world.projectiles.some((g) => g.owner === p)) return 0;
+      const hidden = this.noSightT > S.nadeHide, tied = t.action || this.youStillT > S.nadeCamp;
+      if (!hidden && (!tied || this.spraying || dist < NADE_OPEN_NEAR)) return 0;
+      const hurt = t.health < C.player.health * NADE_HURT_AT;
+      if (p.nades === 1 && !hurt && !(this.noSightT > S.nadeHide * NADE_LAST_WAIT) && Math.random() < S.nadeSave) return 0;
+      return S.nadeCare * (hidden ? 1 : NADE_READS) * (hurt ? NADE_HURT_MULT : 1);
+    }
+
+    // True while a throw is under way, which is when its hands are full. It has to cook and throw like you do. It keeps
+    // adjusting where it's aiming while it cooks, and lets go at once if it's shot or you run up to it.
     grenadeThinking(dist, dt) {
       const p = this.p, t = this.t, S = this.S, n = this.nade;
+      const yourSpeed = Math.hypot(t.pos.x - t.posOld.x, t.pos.y - t.posOld.y) / dt;
+      this.youStillT = yourSpeed < NADE_STILL_SPEED ? this.youStillT + dt : 0;
       if (n) {
         n.t += dt;
         if (p.nades < n.had || (n.phase !== 'thrown' && p.nades <= 0)) n.phase = 'thrown';
         if (n.phase === 'ready' && n.t >= n.wait) n.phase = 'cooking';
-        if (n.phase === 'thrown' && p.throwCooldown <= 0) {
-          if (p.cur === 3) p.switchTo(n.back);
-          this.nade = null;
-          return false;
+        if (n.phase === 'thrown') {
+          if (p.throwCooldown <= 0) {
+            if (p.cur === 3) p.switchTo(n.back);
+            this.nade = null;
+            return false;
+          }
+          return true;
+        }
+        n.hold = p.cookT < n.cook && dist >= NADE_NEAR / 2 && !this.attacked;
+        if ((n.retarget -= dt) <= 0) {
+          n.retarget = NADE_RETARGET;
+          const spot = this.nadeSpot(n.T);
+          if (spot) { n.x = spot.x + n.ox; n.y = spot.y + n.oy; }
         }
         return true;
       }
       if (p.nades <= 0 || (this.nadeT -= dt) > 0) return false;
       this.nadeT = rand(NADE_EVERY[0], NADE_EVERY[1]);
       if (this.fleeing || this.mode !== 'hold' || this.fightMelee() || this.cover || this.shield || p.reloading || p.reloadAgain || this.reloadSlot != null || p.bursts.length || p.throwCooldown > 0 || p.cur >= 2) return false;
-      const hidden = this.noSightT > S.nadeHide;
-      if (!hidden && !t.reloading) return false;
-      if (Math.random() >= S.nadeCare * (hidden ? 1 : NADE_READS)) return false;
-      const spot = this.nadeSpot();
+      if (Math.random() >= this.nadeWorthIt(dist)) return false;
+      const T = this.fuseFor(dist), spot = this.nadeSpot(T);
       if (!spot) return false;
       this.nadeThrows++;
       this.nadeT = rand(NADE_GAP[0], NADE_GAP[1]);
       this.spraying = false; this.qsT = null;
       const off = gauss() * S.nadeAim, a = Math.random() * Math.PI * 2;
-      this.nade = { x: spot.x + Math.cos(a) * off, y: spot.y + Math.sin(a) * off, phase: 'ready', t: 0, wait: rand(NADE_WAIT[0], NADE_WAIT[1]), back: p.cur, had: p.nades, cook: S.nadeCook * NADE_MAX_COOK };
+      this.nade = {
+        ox: Math.cos(a) * off, oy: Math.sin(a) * off, x: spot.x + Math.cos(a) * off, y: spot.y + Math.sin(a) * off,
+        phase: 'ready', t: 0, wait: rand(NADE_WAIT[0], NADE_WAIT[1]), back: p.cur, had: p.nades, T, cook: SV.FRAG.fuseTime - T, hold: true, retarget: NADE_RETARGET,
+      };
       p.switchTo(3);
       return true;
     }
 
-    // Where its hand has to go, and how hard, for the throw to end up on the spot: moving adds to a throw (projectile.ts).
+    // Where its hand has to go, and how hard, for the throw to end up on the spot just as the fuse runs out. Moving adds to a throw (projectile.ts).
     nadeThrowAngle() {
       const p = this.p, n = this.nade, P = SV.FRAG.throwPhysics, lead = this.S.nadeLead * P.playerVelMult;
-      const vx = (n.x - p.pos.x) / NADE_REST - p.moveVx * lead, vy = (n.y - p.pos.y) / NADE_REST - p.moveVy * lead;
+      const T = n.hold ? n.T : Math.max(0.05, SV.FRAG.fuseTime - p.cookT), k = this.throwReach(T);
+      const vx = (n.x - p.pos.x) / k - p.moveVx * lead, vy = (n.y - p.pos.y) / k - p.moveVy * lead;
       p.toMouseLen = (Math.hypot(vx, vy) / P.speed) * C.player.throwableMaxMouseDist;
       return Math.atan2(vy, vx);
     }
@@ -1113,6 +1176,7 @@
         this.stuckT = moved < p.calcSpeed() * STUCK_SHARE ? this.stuckT + dt : 0;
         if (this.stuckT > STUCK_TIME) { this.stuckT = 0; this.dirT = 0; this.path = null; }
       }
+      if (this.nade && this.nade.phase === 'cooking' && p.cookT > this.nade.cook - NADE_STEADY && this.dodgeT <= 0) this.dirT = Math.max(this.dirT, 2 * dt);
       if (this.o.still) { this.dirIdx = -1; }
       else if (onPath) { /* the path sets its direction */ }
       else if ((this.dirT -= dt) <= 0) {
@@ -1151,7 +1215,7 @@
         ax = t.pos.x + this.vEst.x * tt * this.lead;
         ay = t.pos.y + this.vEst.y * tt * this.lead;
       }
-      let want = throwing ? this.nadeThrowAngle() : Math.atan2(ay - p.pos.y, ax - p.pos.x);
+      let want = throwing && this.nade ? this.nadeThrowAngle() : Math.atan2(ay - p.pos.y, ax - p.pos.x);
       const cover = this.o.fire && !throwing && !using ? this.panCover(dist) : null;
       if (cover != null) { want += cover; this.spraying = false; }
       let diff = want - this.aimAng;
@@ -1171,7 +1235,7 @@
         const n = this.nade;
         if (n.phase === 'cooking') {
           if (!p.cooking) i.shootStart = true;
-          i.shootHold = p.cookT < n.cook && dist >= NADE_NEAR / 2;   // lets go early if you've run up to it
+          i.shootHold = n.hold;
         }
       } else if (this.o.fire && !using && !t.dead) {
         const inRange = d.kind === 'gun' ? dist < d.bullet.distance * 0.9 : dist < this.meleeReach() - MELEE_SWING;

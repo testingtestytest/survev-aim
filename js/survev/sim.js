@@ -117,9 +117,9 @@
         .sort((p, q) => Math.hypot(p.x - a.x, p.y - a.y) - Math.hypot(q.x - a.x, q.y - a.y));
     }
     // Does anything a blast can't pass, or a thrown grenade can't clear, stand on this line? explosion.ts: height above 0.5.
-    tallBetween(a, b) {
+    tallBetween(a, b, room = 0) {
       const len = Math.hypot(b.x - a.x, b.y - a.y);
-      return this.near((a.x + b.x) / 2, (a.y + b.y) / 2, len / 2 + 3).some((o) => !o.dead && o.height > BLAST_STOP && segCircle(a.x, a.y, b.x, b.y, o.x, o.y, o.r) != null);
+      return this.near((a.x + b.x) / 2, (a.y + b.y) / 2, len / 2 + 3 + room).some((o) => !o.dead && o.height > BLAST_STOP && segCircle(a.x, a.y, b.x, b.y, o.x, o.y, o.r + room) != null);
     }
     // Would moving along dir run into something soon? Moving away from what you're touching doesn't count.
     ahead(pos, dir, look, rad) {
