@@ -288,6 +288,25 @@
     tree: { image: 'part-log-01', life: [1, 1.5], drag: [1, 5], rotVel: Math.PI * 3, start: [0.1, 0.2], end: [0.08, 0.18], tint: (v) => [v, v * 0.3, 0], value: [0.35, 0.45] },
   };
   const DEBRIS_FADE = [0.9, 1], DEBRIS_COUNT = [5, 11], DEBRIS_SPEED = [5, 15];
+  // particles.ts heal_basic and boost_basic, spawned by player.ts updateActionEffect while someone's using an item.
+  const USE_FX = {
+    heal: { image: 'part-heal-basic', life: [0.75, 1], drag: [0.25, 0.25], rotVel: 0, start: [0.1, 0.12], end: [0.05, 0.07], tint: (v) => [v, 0, 0], value: [0.7, 1], fade: [0.7, 1], fadeIn: 0.05, still: true },
+    boost: { image: 'part-boost-basic', life: [0.75, 1], drag: [0, 0], rotVel: Math.PI * 0.375, start: [0.12, 0.14], end: [0.06, 0.08], tint: (v) => [v * 0.2, v, 0], value: [0.7, 1], fade: [0.7, 1], fadeIn: 0.05 },
+  };
+  const USE_FX_RATE = [0.3, 0.35], USE_FX_RADIUS = 1.5, USE_FX_SPEED = [1, 1.5];   // emitter heal_basic: straight up the screen
+  function spawnUseFx(world) {
+    for (const p of world.players) {
+      if (p.dead || !p.action || p.action.type !== 'use') { p.useFxAt = null; continue; }
+      if (p.useFxAt == null) p.useFxAt = world.time;
+      while (p.useFxAt <= world.time) {
+        const D = USE_FX[SV.ITEMS[p.action.item].kind], a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * USE_FX_RADIUS;
+        const v = Math.round(between(D.value) * 20) / 20, c = D.tint(v).map((q) => Math.round(q * 255));
+        world.debris.push({ D, x: p.pos.x + Math.cos(a) * r, y: p.pos.y + Math.sin(a) * r, vx: 0, vy: -between(USE_FX_SPEED), born: world.time, life: between(D.life), drag: between(D.drag),
+          rot: D.still ? 0 : Math.random() * Math.PI * 2, start: between(D.start), end: between(D.end), tint: (c[0] << 16) | (c[1] << 8) | c[2] });
+        p.useFxAt += between(USE_FX_RATE);
+      }
+    }
+  }
   const between = (r) => r[0] + Math.random() * (r[1] - r[0]);
   function spawnDebris(world) {
     const f = world.field;
@@ -308,12 +327,14 @@
   }
   function drawDebris(g, world, X, Y, S) {
     spawnDebris(world);
+    spawnUseFx(world);
     if (!world.debris.length) return;
     world.debris = world.debris.filter((q) => world.time - q.born < q.life);
     for (const q of world.debris) {
-      const age = world.time - q.born, t = age / q.life, go = (1 - Math.exp(-q.drag * age)) / q.drag, s = q.start + (q.end - q.start) * t;
+      const age = world.time - q.born, t = age / q.life, go = q.drag ? (1 - Math.exp(-q.drag * age)) / q.drag : age, s = q.start + (q.end - q.start) * t;
+      const fade = q.D.fade || DEBRIS_FADE, fadeIn = q.D.fadeIn ? Math.min(1, t / q.D.fadeIn) : 1;
       g.save();
-      g.globalAlpha = Math.max(0, Math.min(1, 1 - (t - DEBRIS_FADE[0]) / (DEBRIS_FADE[1] - DEBRIS_FADE[0])));
+      g.globalAlpha = Math.max(0, Math.min(1, 1 - (t - fade[0]) / (fade[1] - fade[0]))) * fadeIn;
       g.translate(X(q.x + q.vx * go), Y(q.y + q.vy * go));
       g.rotate(q.rot + q.D.rotVel * age);
       g.scale(S, S);

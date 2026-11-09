@@ -365,7 +365,7 @@
     me.setGrenades(myNades);
     const preload = [me.slots[0].type, me.slots[1].type, me.slots[2].type, cfg.botMelee, ...BOT_GUNS].map(SV.defOf).filter(Boolean);
     const F = SV.FRAG;
-    SV.preload([...Object.values(SV.ITEMS).map((i) => i.loot), 'map-stone-01', 'part-log-01', F.loot, F.worldImg.sprite, F.burst.image, F.decal.sprite, ...Object.values(F.handImg).flatMap((h) => [h.left && h.left.sprite, h.right && h.right.sprite])]);
+    SV.preload([...Object.values(SV.ITEMS).map((i) => i.loot), 'map-stone-01', 'part-log-01', 'part-heal-basic', 'part-boost-basic', F.loot, F.worldImg.sprite, F.burst.image, F.decal.sprite, ...Object.values(F.handImg).flatMap((h) => [h.left && h.left.sprite, h.right && h.right.sprite])]);
     SV.preload(['player-base-01', 'player-hands-01', 'player-bullet-trail-02', ...preload.flatMap((d) => [d.loot, d.world && d.world.sprite, d.world && d.world.magImg && d.world.magImg.sprite])]);
 
     // Anywhere you can currently see, so a bigger scope means a wider spread. Measured in pixels so it

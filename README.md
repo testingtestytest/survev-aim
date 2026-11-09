@@ -119,7 +119,7 @@ The game's four items, and you never run out:
 | Soda | 9 | 3s | 25 adrenaline |
 | Pills | 0 | 5s | 50 adrenaline |
 
-Press the key or click the item on the right of the screen. As in the game, you walk at half speed while using one, and firing, swinging, cooking a grenade or swapping weapons cancels it. You can't use a healing item at full health, or start one while another is going. **BOT USES ITEMS** turns them on or off for the bot.
+Press the key or click the item on the right of the screen. While someone's using one, red crosses or green plus signs float up around them, as in the game, which is how you can tell the bot's healing. As in the game, you walk at half speed while using one, and firing, swinging, cooking a grenade or swapping weapons cancels it. You can't use a healing item at full health, or start one while another is going. **BOT USES ITEMS** turns them on or off for the bot.
 
 The bot heals and tops up behind cover if there's any nearby, or when it's far away and you've left it alone. Better bots do it sooner, and stop when they come under fire or you come for them.
 
