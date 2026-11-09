@@ -25,7 +25,7 @@ A rush ends when the bot reaches you. If you keep getting away, it gives up afte
 
 The bot gives ground as well as taking it. With a dynamic distance, better bots back off when they start a reload or get hurt. They also pick their moment for a melee charge: they wait until you can't shoot before they'd arrive, weave in on the diagonals with a pan held toward you, and call it off if you recover while they're still out of reach. Weaker bots run straight at a loaded gun.
 
-In 1v1 the bot carries an **AK-47 and Mosin** by default. You can change either, or leave out the second. It changes guns when one runs out, and alternates two guns with quickswitches after single shots. With a shotgun and another gun, it wants the shotgun closer than 10 units and the other gun beyond 14. Skill sets how often and how quickly it does all this, and whether it reloads both guns before fighting again. Guns that load shell by shell get a partial reload before it fires again, and better bots load more. The bot also sneaks in reloads with bullets left in the mag when it feels safe: when you can't see it, when you're far away and haven't fired lately, or (high and pro) when you're reloading. Better bots do this more often and with fuller mags. A shot of yours coming straight at it interrupts any reload that still has bullets in the mag, once it reacts, and it fires back.
+In 1v1 the bot carries a **Mosin and AK-47** by default, starting on the Mosin. You can change either, or leave out the second. It changes guns when one runs out, and alternates two guns with quickswitches after single shots. With a shotgun and another gun, it wants the shotgun closer than 10 units and the other gun beyond 14. Skill sets how often and how quickly it does all this, and whether it reloads both guns before fighting again. Guns that load shell by shell get a partial reload before it fires again, and better bots load more. The bot also sneaks in reloads with bullets left in the mag when it feels safe: when you can't see it, when you're far away and haven't fired lately, or (high and pro) when you're reloading. Better bots do this more often and with fuller mags. A shot of yours coming straight at it interrupts any reload that still has bullets in the mag, once it reacts, and it fires back.
 
 If your **pan faces the bot**, in your hand or on your back, it's reluctant to shoot, because the shots would come straight back. It waits for an opening, with an occasional shot, and fires as soon as you turn. Better bots hold back more reliably and use the wait to reload.
 
@@ -147,6 +147,8 @@ Phones and tablets are detected the way survev does it, so a touchscreen laptop 
 The X in the top-right corner goes back to the menu. Browsers can hold back the first few pixels of finger movement, so a very small pull may not register.
 
 A press on the scope row or an item never fires your gun. Double-clicking or double-tapping during the countdown skips the rest of it.
+
+**WIPE ALL DATA**, at the bottom of **KEYBINDS AND SETTINGS**, erases every saved setting, keybind, crosshair choice and best score, then reloads the page. It asks for a second press first, and that can't be undone.
 
 ## Keybinds
 Open **KEYBINDS AND SETTINGS** from the menu. Defaults:

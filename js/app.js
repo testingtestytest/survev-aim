@@ -231,7 +231,18 @@
     if (!inGame) { $('#countdown').textContent = ''; $('#countdown-hint').textContent = ''; }
   }
 
+  // Wiping can't be undone, so it takes a second press soon after the first.
+  const WIPE_CONFIRM_TIME = 5000, WIPE_LABEL = 'WIPE ALL DATA', WIPE_CONFIRM_TEXT = 'ERASE ALL SETTINGS, KEYBINDS AND BEST SCORES? PRESS AGAIN';
+  let wipeTimer = null;
+  function disarmWipe() {
+    clearTimeout(wipeTimer);
+    wipeTimer = null;
+    $('#wipe-data').textContent = WIPE_LABEL;
+    $('#wipe-data').classList.remove('armed');
+  }
+
   function goMenu() {
+    disarmWipe();
     state = 'menu';
     game = null;
     SV.Audio.stopAll();
@@ -708,6 +719,16 @@
   $('#binds-btn').onclick = openBinds;
   $('#binds-back').onclick = goMenu;
   $('#binds-reset').onclick = () => { AT.resetBinds(); capturing = null; renderBinds(); };
+  $('#wipe-data').onclick = () => {
+    if (wipeTimer == null) {
+      wipeTimer = setTimeout(disarmWipe, WIPE_CONFIRM_TIME);
+      $('#wipe-data').textContent = WIPE_CONFIRM_TEXT;
+      $('#wipe-data').classList.add('armed');
+      return;
+    }
+    AT.store.wipe();
+    location.replace(location.pathname + location.search);   // a fresh start, without anything the address was opening
+  };
   $('#btn-back').onclick = goMenu;
   $('#xh-back').onclick = goMenu;
   $('#xh-btn').onclick = openCrosshair;

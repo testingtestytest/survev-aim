@@ -17,6 +17,10 @@
     set(k, v) {
       try { localStorage.setItem('aim:' + k, JSON.stringify(v)); } catch (e) {}
     },
+    // Everything this game has saved, and nothing else on the site.
+    wipe() {
+      try { Object.keys(localStorage).filter((k) => k.startsWith('aim:')).forEach((k) => localStorage.removeItem(k)); } catch (e) {}
+    },
   };
 
   AT.rand = (a, b) => a + Math.random() * (b - a);

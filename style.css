@@ -164,6 +164,8 @@ canvas.pv.tall { height: 196px; }
 }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--ink); }
 .btn:hover { background: var(--fg); border-color: var(--fg); color: var(--ink); }
+.btn.danger { border-color: #d00000; color: #d00000; }
+.btn.danger:hover, .btn.danger.armed { background: #d00000; border-color: #d00000; color: #ffffff; }
 .note { font-size: 15px; font-weight: 800; letter-spacing: 1px; }
 
 /* ---------- crosshair screen ---------- */
@@ -284,6 +286,8 @@ body.touch .tab.sel:hover { color: var(--ink); }
 body.touch .opt.sel:hover { color: var(--ink); }
 body.touch .btn:hover { background: var(--bg); border-color: var(--fg); color: var(--fg); }
 body.touch .btn.primary:hover { background: var(--accent); border-color: var(--accent); color: var(--ink); }
+body.touch .btn.danger:hover { background: var(--bg); border-color: #d00000; color: #d00000; }
+body.touch .btn.danger.armed, body.touch .btn.danger.armed:hover { background: #d00000; border-color: #d00000; color: #ffffff; }
 body.touch .wpn-card:hover { border-color: var(--fg); }
 body.touch .wpn-card.open:hover { border-color: var(--accent); }
 body.touch .wpn-tile:hover { border-color: transparent; }
