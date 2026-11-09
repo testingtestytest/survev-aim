@@ -1096,7 +1096,7 @@
       const vel = { x: (p.pos.x - p.posOld.x) / dt, y: (p.pos.y - p.posOld.y) / dt };
       let best = null;
       for (const b of world.bullets) {
-        if (!b.alive || b.owner === p) continue;
+        if (!b.alive || b.owner === p || !b.owner.canHurt(p)) continue;   // a teammate's shot passes through
         const age = world.time - b.born;
         if (age < react) continue;           // hasn't noticed this shot yet
         const rx = p.pos.x - b.pos.x, ry = p.pos.y - b.pos.y;

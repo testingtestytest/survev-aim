@@ -250,6 +250,10 @@
   const scope = { key: 'scope', label: 'SCOPE', default: '1xscope', preview: pvView,
     options: SCOPES.map((v) => ({ v, label: v.replace('scope', '').toUpperCase() + ` (${RADII[v]})` })) };
   const NADE_COUNT = 3;
+  const BOT_GAP = 6;                             // units apart bots spawn
+  const botsSetting = (who) => ({ key: 'bots', label: 'BOTS', default: 1,
+    preview: pvText((p) => (p.v === 1 ? ['ONE BOT'] : [`${p.v} BOTS AT ONCE`, who, "THEY CAN'T HURT EACH OTHER.", 'EACH COMES BACK ON ITS OWN.'])),
+    options: [1, 2, 3, 4, 5].map((v) => ({ v, label: String(v) })) });
   const RESPAWN_SAFE = 1;                        // s you can't be hurt after losing a life
   const nadeOptions = [{ v: 'on', label: 'ON' }, { v: 'off', label: 'OFF' }];
   const nadeText = (who) => pvText((p) => (p.v === 'on' ? [`${who} ${NADE_COUNT} FRAG GRENADES`, 'THEY RECHARGE AFTER A KILL.', 'HOLD TO COOK, 4S FUSE.'] : ['NO GRENADES'])) ;
@@ -289,7 +293,9 @@
       lastShot: [null, null, null], gaps: [], byWeapon: {} };
     const keyLabels = () => [AT.bindLabel('primary'), AT.bindLabel('secondary'), AT.bindLabel('melee'), AT.bindLabel('grenade')];
     const myNades = cfg.myNades === 'on' ? NADE_COUNT : 0, botNades = kind === '1v1' && cfg.botNades === 'on' ? NADE_COUNT : 0;
-    let bot = null, ai = null, botSpawn = 0, respawnT = -1, lastShotT = null, lastHitShot = null;
+    const botCount = Math.max(1, cfg.bots || 1);
+    const bots = [];                         // { p, ai, born, respawnT } for each bot, which come back on their own
+    let lastShotT = null, lastHitShot = null;
 
     const meEvents = {
       shot(p, d) {
@@ -335,12 +341,14 @@
               head: res.head, t: 0, shotId, gun: d.name, target });
           }
         }
-        if (res.killed) botKilled();
+        if (res.killed) botKilled(target);
       },
       reflect() { st.reflects++; },
     };
-    function botKilled() {
-      st.kills++; st.ttk.push(world.time - botSpawn); respawnT = 0.6;
+    function botKilled(p) {
+      const b = bots.find((q) => q.p === p);
+      if (!b) return;
+      st.kills++; st.ttk.push(world.time - b.born); b.respawnT = 0.6;
       // training reward: full health and full reload on kill
       me.health = C.player.health;
       if (myNades) me.setGrenades(myNades);    // a kill recharges your grenades
@@ -354,7 +362,7 @@
         // The bot's own shot, sent back by your pan: that damage is yours.
         st.dmg += res.dealt;
         if (cfg.popups === 'on') popupsArr.push({ x: target.pos.x, y: target.pos.y - 1.2, dmg: res.dmg, text: res.dmg.toFixed(0), head: res.head, t: 0, target });
-        if (res.killed) botKilled();
+        if (res.killed) botKilled(p);
       },
     };
 
@@ -380,26 +388,38 @@
       let at;
       for (let tries = 0; tries < 30; tries++) {
         at = { x: rand(-hw, hw), y: rand(-top, bottom) };
-        if (Math.hypot(at.x, at.y) >= SPAWN_MIN_DIST && (!world.field || world.field.isFree(me.pos.x + at.x, me.pos.y + at.y, 2))) break;
+        if (Math.hypot(at.x, at.y) >= SPAWN_MIN_DIST && (!world.field || world.field.isFree(me.pos.x + at.x, me.pos.y + at.y, 2))
+          && bots.every((b) => b.p.dead || Math.hypot(me.pos.x + at.x - b.p.pos.x, me.pos.y + at.y - b.p.pos.y) >= BOT_GAP)) break;
       }
       return at;
     }
 
-    function spawnBot() {
-      if (bot) world.players = world.players.filter((p) => p !== bot);
+    function spawnBot(k) {
+      const old = bots[k];
+      if (old) world.players = world.players.filter((p) => p !== old.p);
       const at = spawnOffset();
-      bot = world.addPlayer(me.pos.x + at.x, me.pos.y + at.y,
-        { id: 'bot', helmet: cfg.botHelmet || 0, chest: cfg.botVest || 0, boost: cfg.botBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: botEvents, infiniteAmmo: cfg.infAmmo === 'both' });
+      const bot = world.addPlayer(me.pos.x + at.x, me.pos.y + at.y,
+        { id: k ? 'bot' + (k + 1) : 'bot', team: 'bots', helmet: cfg.botHelmet || 0, chest: cfg.botVest || 0, boost: cfg.botBoost || 0, boostDrain: cfg.boostDrain !== 'off', events: botEvents, infiniteAmmo: cfg.infAmmo === 'both' });
       const fire = kind === '1v1';
       bot.setLoadout(fire ? cfg.botGun : '', fire ? cfg.botGun2 || '' : '', (fire && cfg.botMelee) || 'fists');
       bot.setGrenades(botNades);
-      ai = new SV.Bot(bot, me, botOpts(cfg, kind === '1v1', () => {
+      const ai = new SV.Bot(bot, me, botOpts(cfg, kind === '1v1', () => {
         const { W, H } = api.size, ppu = viewPpu(W, H, zoom);
         return { hw: W / 2 / ppu - SCREEN_MARGIN, hh: H / 2 / ppu - SCREEN_MARGIN };
       }));
-      botSpawn = world.time;
+      bots[k] = { p: bot, ai, born: world.time, respawnT: -1 };
     }
-    spawnBot();
+    for (let k = 0; k < botCount; k++) spawnBot(k);
+    // The health bar at the top is for the nearest bot still standing.
+    function shownBot() {
+      let best = null, bestD = Infinity;
+      for (const b of bots) {
+        if (b.p.dead) continue;
+        const d = Math.hypot(b.p.pos.x - me.pos.x, b.p.pos.y - me.pos.y);
+        if (d < bestD) { bestD = d; best = b.p; }
+      }
+      return best || bots[0].p;
+    }
 
     function readInput() {
       const k = api.keys;
@@ -448,7 +468,8 @@
         if (hit) { if (hit !== scope) setScope(hit); return true; }
         const item = SV.itemAt(W, H, !!touch, x, y);
         if (!item) return false;
-        if (world.time > 0) me.useItem(item);
+        // The one you're using cancels it, as a second way to do what the cancel key does.
+        if (world.time > 0) { if (me.action && me.action.type === 'use' && me.action.item === item) me.cancelAction(); else me.useItem(item); }
         return true;
       },
       wheel(dir) { wheelDir = dir; },
@@ -461,14 +482,14 @@
         while (acc >= STEP) {
           acc -= STEP;
           if (touch) readTouch(); else readInput();
-          if (ai) ai.update(STEP);
+          for (const b of bots) b.ai.update(STEP);
           world.update(STEP);
-          if (respawnT >= 0 && (respawnT -= STEP) < 0) spawnBot();
+          bots.forEach((b, k) => { if (b.respawnT >= 0 && (b.respawnT -= STEP) < 0) spawnBot(k); });
           if (me.dead) {
             st.deaths++;
             me.dead = false; me.health = C.player.health; me.boost = cfg.myBoost || 0;
             me.setGrenades(myNades);           // a new life, and a kill for the bot: both have their grenades again
-            if (bot && !bot.dead) bot.setGrenades(botNades);
+            for (const b of bots) if (!b.p.dead) b.p.setGrenades(botNades);
             world.clearShots();
             me.safeT = RESPAWN_SAFE;
             api.loseLife();
@@ -487,6 +508,7 @@
         else if (a === 'grenade') me.switchTo(3);
         else if (a === 'swap') me.swapKey();
         else if (a === 'reload') me.requestReload();
+        else if (a === 'cancel') me.cancelAction();   // player.ts Input.Cancel: stops a reload or an item
         else if (SV.ITEMS[a]) me.useItem(a);
         else if (a === 'nextScope') stepScope(1);
         else if (a === 'prevScope') stepScope(-1);
@@ -501,7 +523,7 @@
           keyLabels: keyLabels(), time: world.time, scopes: SCOPES, scope, mouse: api.mouse,
           topLeft: left,
           topRight: kind === '1v1' ? `KILLS ${st.kills}  DEATHS ${st.deaths}` : `DMG ${Math.round(st.dmg)}`,
-          bot, timeline: kind === 'range' || cfg.timeline === 'on' ? timeline : null, touch: !!touch,
+          bot: shownBot(), timeline: kind === 'range' || cfg.timeline === 'on' ? timeline : null, touch: !!touch,
           boxes: [
             api.timeLeft != null ? { label: 'Time', value: Math.ceil(Math.max(0, api.timeLeft)) } : { label: 'Lives', value: api.lives },
             kind === '1v1' ? { label: 'Kills', value: st.kills, side: 'left' } : { label: 'Damage', value: Math.round(st.dmg), side: 'left' },
@@ -551,10 +573,11 @@
     group: 'survev',
     name: '1V1',
     description: 'Fight a bot that strafes, changes its range, heals behind cover and fights back. How many kills can you get before you run out of lives?',
-    simple: ['primary', 'secondary', 'melee', 'myNades', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'botNades', 'obstacles', 'scope', 'end', 'duration'],
+    simple: ['primary', 'secondary', 'melee', 'myNades', 'bots', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'botNades', 'obstacles', 'scope', 'end', 'duration'],
     settings: [
       ...loadout(),
       myNadesSetting,
+      botsSetting('ALL OF THEM FIGHTING YOU.'),
       botRange,
       { key: 'rush', label: 'RUSHES', default: 'sometimes', preview: pvBot,
         options: [{ v: 'never', label: 'NEVER' }, { v: 'sometimes', label: 'SOMETIMES' }, { v: 'often', label: 'OFTEN' }] },
@@ -594,9 +617,10 @@
     group: 'survev',
     name: 'QUICKSWITCH',
     description: 'A strafing bot keeps changing its range at random. Shoot, switch, shoot again — the timeline shows every switch delay and whether it was free.',
-    simple: ['primary', 'secondary', 'melee', 'botRange', 'skill', 'obstacles', 'scope', 'duration'],
+    simple: ['primary', 'secondary', 'melee', 'bots', 'botRange', 'skill', 'obstacles', 'scope', 'duration'],
     settings: [
       ...loadout(),
+      botsSetting('MORE TARGETS TO SWITCH BETWEEN.'),
       botRange,
       { key: 'botMove', label: 'BOT MOVEMENT', default: 'strafe', preview: pvBot,
         options: [{ v: 'still', label: 'STILL' }, { v: 'strafe', label: 'STRAFE' }, { v: 'wide', label: 'WIDE' }, { v: 'mixed', label: 'MIXED' }] },

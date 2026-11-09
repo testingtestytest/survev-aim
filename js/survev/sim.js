@@ -277,6 +277,7 @@
       this.boostDrain = opts.boostDrain !== false;
       this.infiniteAmmo = !!opts.infiniteAmmo;
       this.events = opts.events || {};
+      this.team = opts.team || null;  // players on the same team can't hurt each other
       this.stepDist = 0;            // sound only, from here down
       this.swapSoundT = 0;
       this.actionSound = null;
@@ -490,6 +491,9 @@
       if (this.shotSlowdownTimer > 0 || (this.action && this.action.type === 'use')) s *= 0.5;
       return clamp(s, 1, 10000);
     }
+
+    // Can this player's bullets, blasts and swings hurt that one? Yourself yes (reflections, your own grenade), a teammate no.
+    canHurt(other) { return other === this || !this.team || this.team !== other.team; }
 
     damage(amount, srcDef) {
       if (this.dead || this.safeT > 0) return null;
@@ -770,7 +774,7 @@
         if (pen > 0) hits.push({ o, pen, prio: 1 });
       }
       for (const p of this.world.players) {
-        if (p === this || p.dead) continue;
+        if (p === this || p.dead || !this.canHurt(p)) continue;
         const pen = col.rad + p.rad - Math.hypot(p.pos.x - col.x, p.pos.y - col.y);
         if (pen <= 0) continue;
         if (nearby.some((o) => segCircle(this.pos.x, this.pos.y, p.pos.x, p.pos.y, o.x, o.y, o.r) != null)) continue;
@@ -893,7 +897,7 @@
       const E = SV.FRAG.explosion, R = E.rad.max, A = this.audio;
       const shotId = (this.shotSeq = (this.shotSeq || 0) + 1);
       const obstacles = this.field ? this.field.near(pos.x, pos.y, R + 3).filter((o) => !o.dead) : [];
-      const players = this.players.filter((p) => !p.dead);
+      const players = this.players.filter((p) => !p.dead && owner.canHurt(p));
       const things = [...obstacles.map((o) => ({ o, x: o.x, y: o.y, r: o.r })), ...players.map((p) => ({ p, x: p.pos.x, y: p.pos.y, r: p.rad }))];
       const step = Math.min(Math.acos(1 - (0.75 / R) ** 2 / 2), 0.3), done = new Set();
       for (let ang = -Math.PI; ang < Math.PI; ang += step) {
@@ -979,7 +983,7 @@
         // segment vs circle and pan, nearest hit. A reflected bullet can hit whoever fired it (damageSelf).
         let hit = null, hitT = Infinity, pan = null, panD = Infinity, panBy = null;
         for (const p of this.players) {
-          if ((p === b.owner && !b.reflectCount && !b.gunDef.bullet.shrapnel) || p.dead) continue;   // bullet.ts damageSelf
+          if ((p === b.owner && !b.reflectCount && !b.gunDef.bullet.shrapnel) || p.dead || !b.owner.canHurt(p)) continue;   // bullet.ts damageSelf
           const t = segCircle(b.pos.x, b.pos.y, nx, ny, p.pos.x, p.pos.y, p.rad);
           const ph = p.hasActivePan() ? this.panHit(b, nx, ny, step, p) : null;
           if (t != null && (!ph || t * step < ph.dist)) { if (t < hitT) { hitT = t; hit = p; } }

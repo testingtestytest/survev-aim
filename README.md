@@ -109,6 +109,9 @@ Press **4** to equip one, or scroll to it, then hold the fire button to cook it 
 
 The bot uses grenades to flush you out when you've been out of sight for a while, and now and then when you're reloading, healing or standing still in the open. It looks for a landing spot with a clear throw and a clear blast to you, leaves time to see what each one did, and goes back to its gun. It doesn't start one under fire, and lets go at once if it's shot while cooking. Better bots throw sooner and land closer, cook it to go off about as it lands, lead you if you're moving, land it just past you so running brings you out toward their gun, and keep the last one for a good moment. Bots run from grenades, out past the reach of the blast, dropping any item they're using. Better bots see where one's heading sooner and are more likely to react, so cooking one is the way to catch them.
 
+## More bots
+**BOTS** in 1v1 and Quickswitch puts up to 5 bots in at once. They're on one team, so their bullets, blasts and swings pass through each other harmlessly, and each comes back on its own after you kill it. Every kill counts toward your score. The health bar at the top shows the nearest one.
+
 ## Healing and adrenaline
 The game's four items, and you never run out:
 
@@ -119,7 +122,7 @@ The game's four items, and you never run out:
 | Soda | 9 | 3s | 25 adrenaline |
 | Pills | 0 | 5s | 50 adrenaline |
 
-Press the key or click the item on the right of the screen. While someone's using one, red crosses or green plus signs float up around them, as in the game, which is how you can tell the bot's healing. As in the game, you walk at half speed while using one, and firing, swinging, cooking a grenade or swapping weapons cancels it. You can't use a healing item at full health, or start one while another is going. **BOT USES ITEMS** turns them on or off for the bot.
+Press the key or click the item on the right of the screen. **X** cancels it, as in the game, and so does clicking the item you're using; X stops a reload too. While someone's using one, red crosses or green plus signs float up around them, as in the game, which is how you can tell the bot's healing. As in the game, you walk at half speed while using one, and firing, swinging, cooking a grenade or swapping weapons cancels it. You can't use a healing item at full health, or start one while another is going. **BOT USES ITEMS** turns them on or off for the bot.
 
 The bot heals and tops up behind cover if there's any nearby, or when it's far away and you've left it alone. Better bots do it sooner, and stop when they come under fire or you come for them.
 
