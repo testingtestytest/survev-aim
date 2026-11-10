@@ -148,6 +148,7 @@ Phones and tablets are detected the way survev does it, so a touchscreen laptop 
 - **Right side aims:** you fire when you pull past 93% of the stick's range, so a smaller pull aims without firing.
 - **Facing:** if you move without aiming for 0.5s, you turn to face where you're walking.
 - **Buttons:** tap a weapon slot to switch, and tap the ammo count or the bullets icon to reload.
+- **Layout:** as in the game's mobile version. Scopes go down the left. In landscape the items run along the top, the weapons down the right, and health and ammo sit at the bottom. In portrait, health is at the top, items top-right, ammo on the right and the weapons in a row along the bottom.
 - **Zoom:** scopes use the game's mobile values, so 1x shows more of the map than on desktop (radius 32 instead of 28).
 - **Options in FULL:** move stick and aim stick can be **Anywhere** (the default) or **Fixed**, and the aim line can be turned off.
 

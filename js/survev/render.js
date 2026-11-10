@@ -472,20 +472,47 @@
   const T_HIT_MARGIN = 5;              // tap area beyond the visible slot; the next slot starts 7px away
   function hudLayout(W, H, touch) {
     if (touch) {
-      const clipY = H - 78 - 32;
+      // The game's phone layout. The scopes go down the left (#ui-top-center-scopes-wrapper: left 6px, top 132px),
+      // one above the other.
+      // A short screen starts them higher, so all five fit above the frame counter in the bottom-left corner.
+      const land = W >= H, scopeY = H < 380 ? 110 : 132 + 6 + 21;
+      const scope = { vertical: true, x: 6 + 21, y: scopeY, step: Math.max(30, Math.min(42, (H - 64 - scopeY) / 4)), r: 21, size: 24, append: 24, idle: 0.6, idleAlpha: 0.3, hit: T_HIT_MARGIN };
+      const base = {
+        touch, land, sc: 1, scope, number: null,
+        name: { size: 10, right: 4, base: 18 }, img: 28, imgLeft: 2,
+        boostH: 6, boostGap: 3, boostMargin: 0,
+      };
+      if (land) {
+        // Landscape: items in a row across the top (#ui-medical-interactive, left 68%), weapons down the right
+        // (#ui-bottom-right), and the clip, health and adrenaline at the bottom in the middle.
+        const clipY = H - 78 - 32, top = Math.round(H * 0.37);
+        return {
+          ...base, topY: 36,          // the trainer's lives, kills and bot health, under the items
+          slotRight: [W - 6, W - 6, W - 6, W - 6], slotW: 88 * 0.8333, slotWide: 88, slotH: 28,
+          slotY: [0, 1, 2, 3].map((k) => top + 35 * k),
+          hpW: 200, hpH: 18, hpPad: 4, hpBottom: 6, hpNum: 12, boost: [50, 50, 75, 25],
+          clip: { x: W / 2 - 30, y: clipY, w: 60, h: 32, size: 28 },
+          remain: { x: W / 2 + 34.5, y: clipY + 10, w: 44, h: 22, size: 16 },
+          reload: { x: W / 2 + 92.5, y: clipY + 21, r: 11 },
+          armor: { x: W * 0.7, bottom: 6, w: 20, h: 24, img: 18, alpha: 0.75, level: false },
+          items: { row: true, cx: W * 0.68, y: 10, w: 44, h: 20, gap: 6 },
+          pie: { y: H / 3 + (H < 380 ? 0 : 25), s: 0.5 },   // a little higher on a short screen, clear of the Cancel button
+        };
+      }
+      // Portrait: health along the top beside the map (#ui-bottom-center-0, top, scale 0.85) with the adrenaline
+      // under it, items down the top right, the clip on the right (#ui-equipped-ammo-wrapper, top 44%), and the
+      // weapons in a row along the bottom (#ui-weapon-id-1..4, right 240/160/80/0).
+      const ay = Math.round(H * 0.44), wy = H - 20 - 28;
       return {
-        touch, sc: 1,
-        slotX: W - 6, slotW: 88 * 0.8333, slotWide: 88, slotH: 28,
-        slotY: [92, 127, 162, 197],
-        name: { size: 10, right: 4, base: 18 }, img: 28, imgLeft: 2, number: null,
-        hpW: 200, hpH: 18, hpPad: 4, hpBottom: 6, hpNum: 12,
-        boost: [50, 50, 75, 25], boostH: 6, boostGap: 3, boostMargin: 0,
-        clip: { x: W / 2 - 30, y: clipY, w: 60, h: 32, size: 28 },
-        remain: { x: W / 2 + 34.5, y: clipY + 10, w: 44, h: 22, size: 16 },
-        reload: { x: W / 2 + 92.5, y: clipY + 21, r: 11 },
-        armor: { x: W < H ? 30 : W * 0.7, bottom: W < H ? 9 : 6, w: 20, h: 24, img: 18, alpha: 0.75, level: false },
-        scope: { y: 6, r: 21, size: 24, append: 24, gap: 8, idle: 0.6, idleAlpha: 0.3, hit: T_HIT_MARGIN },
-        pie: { y: H / 3 + (W > H ? 25 : 100), s: 0.5 },
+        ...base, topY: 92,            // the trainer's lives, kills and bot health, under its speed and timeline
+        slotRight: [W - 6 - 240, W - 6 - 160, W - 6 - 80, W - 6], slotW: 68, slotWide: 68, slotH: 28, slotY: [wy, wy, wy, wy],
+        hp: { x: 116, y: 4 }, hpW: 170, hpH: 15, hpPad: 3, hpBottom: 0, hpNum: 11, boost: [42, 42, 64, 21], boostBelow: true, boostH: 5,
+        clip: { x: W - 6 - 60, y: ay, w: 60, h: 32, size: 28 },
+        remain: { x: W - 6 - 44, y: ay + 36, w: 44, h: 22, size: 16 },
+        reload: { x: W - 6 - 44 - 6 - 11, y: ay + 36 + 11, r: 11 },
+        armor: { x: 30, bottom: 9, w: 20, h: 24, img: 18, alpha: 0.75, level: false },
+        items: { row: false, x: W - 8 - 44, y: 56, w: 44, h: 20, gap: 3 },   // under the exit button
+        pie: { y: H / 3 + 100, s: 0.5 },
       };
     }
     const big = H > 768 && W > 1200, s = big ? 1 : 0.85, sr = big ? 1 : 0.7;
@@ -493,7 +520,7 @@
     const clipY = H - 62 - 12 - 56;
     return {
       touch, sc: s,
-      slotX: W - 12, slotW: 160 * sr, slotWide: 192 * sr, slotH: 60 * sr,
+      slotX: W - 12, slotRight: [W - 12, W - 12, W - 12, W - 12], slotW: 160 * sr, slotWide: 192 * sr, slotH: 60 * sr,
       slotY: [210, 140, 70, 0].map((b) => H - 12 - (b + 60) * sr),
       name: { size: 18 * sr, right: 8 * sr, base: 54 * sr }, img: 60 * sr, imgLeft: 4 * sr, number: { size: 24 * sr, right: 8 * sr, base: 25 * sr },
       hpW: 400 * s, hpH: 32 * s, hpPad: 6 * s, hpBottom: 12, hpNum: 16 * s,
@@ -508,6 +535,8 @@
   // #ui-top-center-scopes: a centered row where the scope in use is full size and the others are smaller and overlap
   // its margins. on[k] is how far each one has grown, from 0 to 1. Returns each button's center and radius.
   function scopeRow(W, S, on) {
+    // phones: a column down the left, the one in use full size and the others smaller
+    if (S.vertical) return on.map((v, k) => { const q = S.idle + (1 - S.idle) * v; return { cx: S.x, cy: S.y + k * S.step, r: S.r * q, q, v }; });
     const widths = on.map((v) => S.r * 2 - S.gap * 2 * (1 - v));
     let x = W / 2 - widths.reduce((a, b) => a + b, 0) / 2;
     return on.map((v, k) => {
@@ -519,7 +548,12 @@
   // #ui-medical-interactive: a column of healing and adrenaline items, right of center. Phones have the weapons
   // down that side, so the column sits just to their left there.
   function itemBoxes(W, H, touch, ids) {
-    const L = hudLayout(W, H, touch), bw = touch ? 58 : 85, bh = touch ? 26 : 32, gap = touch ? 4 : 5;
+    const L = hudLayout(W, H, touch);
+    if (touch) {
+      const I = L.items, n = ids.length, x0 = I.row ? I.cx - (n * I.w + (n - 1) * I.gap) / 2 : I.x;
+      return ids.map((id, k) => (I.row ? { id, x: x0 + k * (I.w + I.gap), y: I.y, w: I.w, h: I.h } : { id, x: I.x, y: I.y + k * (I.h + I.gap), w: I.w, h: I.h }));
+    }
+    const bw = touch ? 58 : 85, bh = touch ? 26 : 32, gap = touch ? 4 : 5;
     const x = touch ? L.slotX - L.slotWide - 6 - bw : W - 12 - bw;
     const y = touch ? L.slotY[0] : H * 0.4 - (ids.length * (bh + gap) - gap) / 2;
     return ids.map((id, k) => ({ id, x, y: y + k * (bh + gap), w: bw, h: bh }));
@@ -549,7 +583,7 @@
   };
   SV.touchLayout = (W, H) => {
     const L = hudLayout(W, H, true);
-    return { ...L, slots: L.slotY.map((y) => ({ x: L.slotX - L.slotW, y, w: L.slotW, h: L.slotH })) };
+    return { ...L, slots: L.slotY.map((y, k) => ({ x: L.slotRight[k] - L.slotW, y, w: L.slotW, h: L.slotH })) };
   };
   // Which button a tap landed on: 0-2 is a weapon slot, 'reload' reloads, null means it's for the sticks.
   SV.touchButton = (W, H, x, y, hasGun, hasNade) => {
@@ -599,7 +633,7 @@
   function drawSlots(g, me, L, info) {
     for (let k = 0; k < 4; k++) {
       const slot = me.slots[k], d = SV.defOf(slot.type), sel = me.cur === k;
-      const w = L.slotW + (L.slotWide - L.slotW) * anim.wide[k], x = L.slotX - w, y = L.slotY[k], h = L.slotH;
+      const w = L.slotW + (L.slotWide - L.slotW) * anim.wide[k], x = L.slotRight[k] - w, y = L.slotY[k], h = L.slotH;
       if (!d) continue;
       g.save();
       g.globalAlpha = anim.alpha[k];
@@ -626,7 +660,7 @@
     }
     // Trainer addition: free switch status, directly above the slots.
     const ready = me.freeSwitchTimer <= 0, bh = L.touch ? 18 : Math.max(20, L.slotH * 0.4), bw = L.touch ? L.slotW : L.slotW;
-    const bx = L.slotX - bw, by = L.slotY[0] - bh - (L.touch ? 4 : 8);
+    const bx = L.slotRight[0] - bw, by = L.slotY[0] - bh - (L.touch ? 4 : 8);
     rbox(g, bx, by, bw, bh, 5, 'rgba(0,0,0,0.24)');
     g.fillStyle = ready ? '#7dff5a' : 'rgba(255,255,255,0.35)';
     g.beginPath(); g.arc(bx + bh * 0.5, by + bh / 2, bh * 0.2, 0, Math.PI * 2); g.fill();
@@ -637,7 +671,7 @@
   function drawVitals(g, W, H, me, L, info) {
     // boost and health, bottom-center (#ui-bottom-center-0)
     const boxW = L.hpW + L.hpPad * 2, boxH = L.hpH + L.hpPad * 2;
-    const bx = (W - boxW) / 2, by = H - L.hpBottom - boxH;
+    const bx = L.hp ? L.hp.x : (W - boxW) / 2, by = L.hp ? L.hp.y : H - L.hpBottom - boxH;
     rbox(g, bx, by, boxW, boxH, 5, 'rgba(0,0,0,0.4)');
     const ix = bx + L.hpPad, iy = by + L.hpPad, frac = Math.max(0, me.health / C.player.health);
     if (anim.ghost > me.health) rbox(g, ix, iy, L.hpW * Math.max(0, anim.ghost / 100), L.hpH, 5, '#929292');
@@ -648,12 +682,12 @@
     }
     if (frac > 0) rbox(g, ix, iy, L.hpW * frac, L.hpH, 5, fill);
     // The game has no number here; you asked for one, so it stays, with one decimal.
-    mid(g, me.health.toFixed(1), W / 2, iy + L.hpH / 2, L.hpNum, { color: me.health > 45 ? '#000' : '#fff', shadow: false });
+    mid(g, me.health.toFixed(1), bx + boxW / 2, iy + L.hpH / 2, L.hpNum, { color: me.health > 45 ? '#000' : '#fff', shadow: false });
     if (me.boost > 0) {
       const colors = ['#ff901a', '#ff751a', '#ff6616', '#ff5600'], total = L.boost.reduce((a, b) => a + b, 0) + L.boostGap * 3;
       const bp = C.player.boostBreakpoints, sum = bp.reduce((a, b) => a + b, 0);
-      let x = (W - total) / 2, left = me.boost / 100;
-      const y = by - L.boostMargin - L.boostH;
+      let x = bx + (boxW - total) / 2, left = me.boost / 100;
+      const y = L.boostBelow ? by + boxH + 4 : by - L.boostMargin - L.boostH;
       L.boost.forEach((w, i) => {
         const part = bp[i] / sum;
         rbox(g, x, y, w, L.boostH, 2, 'rgba(0,0,0,0.4)');
@@ -705,7 +739,7 @@
       rbox(g, b.x, b.y, b.w, b.h, 5, 'rgba(0,0,0,0.4)');
       if (using === b.id) { g.strokeStyle = '#00ff00'; g.lineWidth = 2; g.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2); }   // .ui-outline-hover
       icon(g, d.loot, b.x + b.w - 5 - (b.h - 2) / 2, b.y + b.h / 2, b.h - 2, b.h - 2);
-      mid(g, '∞', b.x + (b.w - b.h) / 2, b.y + b.h / 2, L.touch ? 16 : 20, { shadow: false });
+      mid(g, '∞', b.x + (b.w - b.h) / 2, b.y + b.h / 2, L.touch ? 14 : 20, { shadow: false });
       g.restore();
     }
   }
@@ -772,7 +806,7 @@
     const s = L.sc * (L.touch ? 0.7 : 1), pad = L.touch ? 8 : 12;
     // Trainer additions: bot health under the scope, and speed where the game shows your team.
     const bw = Math.min(320 * s, W - 2 * (L.touch ? L.slotW + 12 : 180)), bx = (W - bw) / 2;
-    let by = S.y + S.r * 2 + (L.touch ? 4 : 8);
+    let by = L.touch ? L.topY : S.y + S.r * 2 + 8;
     if (L.touch) {
       rbox(g, bx, by, bw, 22, 5, 'rgba(0,0,0,0.24)');
       text(g, info.topLeft, bx + 6, by + 16, 12);
@@ -789,11 +823,11 @@
         info.bot.boost > 0 ? `Adrenaline ${Math.round(info.bot.boost)}` : ''].filter(Boolean).join(' · ');
       if (gear) text(g, gear, W / 2, by + h + (L.touch ? 12 : 16 * s), L.touch ? 10 : 13 * s, { align: 'center', color: 'rgba(255,255,255,0.85)' });
     }
-    const slowed = me.shotSlowdownTimer > 0, spY = L.touch && W < 600 ? S.y + S.r * 2 + 54 : pad;
+    const slowed = me.shotSlowdownTimer > 0, spY = pad;
     const sw = 124 * s * (L.touch ? 1.05 : 1), sh = 28 * s;
     rbox(g, pad, spY, sw, sh, 5, 'rgba(0,0,0,0.24)');
     text(g, `Speed ${me.calcSpeed().toFixed(1)}`, pad + 8 * s, spY + sh * 0.7, 17 * s, { color: slowed ? '#ff6a00' : '#fff' });
-    if (L.touch && info.timeline) drawTimeline(g, info, pad, spY + sh + 6, Math.min(266, W * 0.5), 52, 0.7);
+    if (L.touch && info.timeline) drawTimeline(g, info, pad, spY + sh + 6, Math.min(266, W * 0.5, L.land ? bx - pad - 6 : Infinity), 52, 0.7);
 
     // Time keeps the game's "Alive" box, top-right (#ui-leaderboard-wrapper). The score uses the same style,
     // smaller, either side of the bot's health.
