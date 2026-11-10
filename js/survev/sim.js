@@ -795,6 +795,7 @@
           // animData.ts: the saw's second hit has its own sound
           if (A) A.play(d.sound.playerHit2 && this.meleeAttacks.length === 1 ? d.sound.playerHit2 : d.sound.playerHit, 'hits', p.pos);
           const res = p.damage(d.damage, d);
+          this.meleeHitAt = this.world.time;   // the bot's AI wants to know its swings are landing
           if (res && this.events.hit) this.events.hit(this, p, res, d);
           // player.ts: melee blood stays at the target's position and drifts along the swing
           const dd = Math.hypot(p.pos.x - this.pos.x, p.pos.y - this.pos.y) || 1;

@@ -594,7 +594,7 @@
       { key: 'botItems', label: 'BOT USES ITEMS', default: 'on',
         preview: pvText((p) => (p.v === 'on' ? ['HEALS AND DRINKS', 'BEHIND COVER IF IT CAN,', 'AND STOPS IF IT GETS ATTACKED.'] : ['NO ITEMS', 'IT ONLY HAS ITS ADRENALINE.'])),
         options: [{ v: 'on', label: 'ON' }, { v: 'off', label: 'OFF' }] },
-      { key: 'timeline', label: 'SHOT TIMELINE', default: 'off',
+      { key: 'timeline', label: 'SHOT TIMELINE', default: 'on',
         preview: pvText([AT.touch ? 'TOP-LEFT STRIP' : 'BOTTOM-LEFT STRIP', 'SHOTS, HITS AND EVERY', 'SWITCH DELAY (GREEN = FREE).']),
         options: [{ v: 'off', label: 'OFF' }, { v: 'on', label: 'ON' }] },
       ...touchSettings(),
