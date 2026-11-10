@@ -1,4 +1,4 @@
-# Survev Aim Trainer
+# AIM SURVEV
 
 A 2D aim trainer for survev.io. It's plain HTML, CSS and JS, with no build step.
 
