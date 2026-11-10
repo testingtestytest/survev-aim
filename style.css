@@ -41,6 +41,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 /* ---------- menu ---------- */
 .brand { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
 .logo { font-size: clamp(48px, 10vw, 88px); font-weight: 800; letter-spacing: -3px; line-height: 1; }
+.logo span { color: var(--accent); }
 .btn.xh-btn { display: inline-flex; align-items: center; gap: 12px; line-height: 1; }
 .xh-btn img { width: 32px; height: 32px; }
 
@@ -69,7 +70,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 .keys { margin-top: 48px; display: flex; flex-wrap: wrap; gap: 12px 56px; font-size: 15px; font-weight: 800; letter-spacing: 1px; }
 
-.head-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+.head-btns { display: flex; gap: 12px; flex-wrap: wrap; margin-left: auto; justify-content: flex-end; }
 .tabs { display: flex; margin-top: 48px; }
 .tab {
   all: unset; cursor: pointer;
