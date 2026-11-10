@@ -176,5 +176,3 @@ Open **CROSSHAIR** from the menu to choose one of survev's 30 crosshair styles. 
 
 ## Credits / license
 The crosshairs, weapon stats, all sprites in `assets/survev/` and all sounds in `assets/audio/` come from [survev](https://github.com/survev/survev), which is licensed under **GPL-3.0**. This project is licensed under GPL-3.0 as well; see [LICENSE](LICENSE).
-
-The menu font is [Electrolize](https://fonts.google.com/specimen/Electrolize) (SIL Open Font License), loaded from Google Fonts.
