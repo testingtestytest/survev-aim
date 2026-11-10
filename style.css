@@ -34,16 +34,17 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   z-index: 3;
 }
 .screen.on { display: block; }
+/* The menus use Electrolize, which has a single weight: draw it as designed rather than as a faked bold. */
+.screen { font-family: "Electrolize", "JetBrains Mono", sans-serif; font-synthesis-weight: none; }
+.screen h1, .screen .logo, .screen .card .name, .screen .big { letter-spacing: -1px; }
 .wrap { max-width: 1100px; margin: 0 auto; }
 .screen h1 { font-size: clamp(40px, 8vw, 64px); font-weight: 800; letter-spacing: -2px; margin-top: 24px; line-height: 1; }
 .screen h1 + p, #set-desc { font-size: 18px; line-height: 1.6; margin: 14px 0 36px; max-width: 680px; }
 
 /* ---------- menu ---------- */
-.brand { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
-.logo { font-size: clamp(48px, 10vw, 88px); font-weight: 800; letter-spacing: -3px; line-height: 1; }
-.logo span { color: var(--accent); }
-.sub { margin-top: 14px; font-size: 16px; font-weight: 800; letter-spacing: 2px; }
-.xh-btn { display: inline-flex; align-items: center; gap: 12px; }
+.brand { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; }
+.logo { font-size: clamp(36px, 5.2vw, 56px); font-weight: 800; letter-spacing: -3px; line-height: 1; }
+.btn.xh-btn { display: inline-flex; align-items: center; gap: 12px; line-height: 1; }
 .xh-btn img { width: 32px; height: 32px; }
 
 .cards {
@@ -63,14 +64,13 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   cursor: pointer;
 }
 .card:hover { background: var(--accent); border-color: var(--accent); color: var(--ink); }
-.card .idx { font-size: 15px; font-weight: 800; }
 .card .name { font-size: 44px; font-weight: 800; letter-spacing: -2px; line-height: 1; }
 .card .desc { font-size: 17px; line-height: 1.55; flex: 1; }
 .card .best { font-size: 15px; font-weight: 800; letter-spacing: 1px; }
 .card.soon { border-style: dashed; cursor: default; }
 .card.soon:hover { background: var(--bg); border-color: var(--fg); color: var(--fg); }
 
-.keys { margin-top: 48px; font-size: 15px; font-weight: 800; letter-spacing: 1px; }
+.keys { margin-top: 48px; display: flex; flex-wrap: wrap; gap: 12px 56px; font-size: 15px; font-weight: 800; letter-spacing: 1px; }
 
 .head-btns { display: flex; gap: 12px; flex-wrap: wrap; }
 .tabs { display: flex; margin-top: 48px; }

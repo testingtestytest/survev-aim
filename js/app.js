@@ -259,7 +259,6 @@
       const c = el('button', 'card');
       const best = store.get(bestKey(m, modeCfg(m)), null);
       c.append(
-        el('span', 'idx', String(i + 1).padStart(2, '0')),
         el('span', 'name', m.name),
         el('span', 'desc', (AT.touch && m.touchDescription) || m.description),
         el('span', 'best', 'BEST ' + (best ?? '—')),

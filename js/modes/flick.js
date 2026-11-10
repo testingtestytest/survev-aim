@@ -50,7 +50,7 @@
   AT.register({
     id: 'flick',
     name: 'FLICK',
-    description: 'One target at a time. Hit it and the next one appears somewhere else. Speed and precision both score.',
+    description: 'Snap to each target as it appears.',
     settings: [
       { key: 'size', label: 'TARGET SIZE', default: 'l', preview: AT.pv.sizes(SIZE),
         options: [{ v: 's', label: 'SMALL' }, { v: 'm', label: 'MEDIUM' }, { v: 'l', label: 'LARGE' }] },

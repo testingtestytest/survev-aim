@@ -572,7 +572,7 @@
     id: 'sv-1v1',
     group: 'survev',
     name: '1V1',
-    description: 'Fight a bot that strafes, changes its range, heals behind cover and fights back. How many kills can you get before you run out of lives?',
+    description: 'Fight a bot that moves, takes cover, heals and shoots back.',
     simple: ['primary', 'secondary', 'melee', 'myNades', 'bots', 'botRange', 'skill', 'botGun', 'botGun2', 'botMelee', 'botNades', 'obstacles', 'scope', 'end', 'duration'],
     settings: [
       ...loadout(),
@@ -616,7 +616,7 @@
     id: 'sv-range',
     group: 'survev',
     name: 'QUICKSWITCH',
-    description: 'A strafing bot keeps changing its range at random. Shoot, switch, shoot again — the timeline shows every switch delay and whether it was free.',
+    description: 'Practice switching guns on a strafing target.',
     simple: ['primary', 'secondary', 'melee', 'bots', 'botRange', 'skill', 'obstacles', 'scope', 'duration'],
     settings: [
       ...loadout(),
