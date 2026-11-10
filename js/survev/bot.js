@@ -27,7 +27,8 @@
   //             most seconds it'll cook one mid-fight, nadeDanger: chance per check it throws one when hurt and pushed,
   //             dangerAt: its health below which that counts, nadePush: chance it rushes you when you pull a grenade out,
   //             healPush: chance it rushes you when you start healing, to hurt you before it lands
-  //  Guns       magLow: chance it changes off a nearly empty automatic rather than firing it dry
+  //  Guns       magLow: chance it changes off a nearly empty automatic rather than firing it dry, blastSafe: nearest
+  //             you can be before it stops firing explosive rounds (the USAS) at you, as they'd hurt it too
   //  Grenades   nadeCare: chance per check it throws one, nadeHide: seconds you've been out of sight before it thinks
   //             of it, nadeAim: how far off it lands (units, std dev), nadeFuse: seconds it leaves on the fuse so
   //             there's less time to run, nadeLead: how well it allows for its own movement, nadePredict: how well it
@@ -52,10 +53,10 @@
   //  Obstacles  replan: seconds between path updates, seekAfter: seconds without seeing you before it goes
   //             looking, losCare: chance it holds fire instead of shooting an obstacle in the way
   SV.BOT_SKILL = {
-    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1], chargeRead: 0.1,  chargeWeave: 0,   reloadBack: 0.15, hurtBack: 0.2, nadeCare: 0.15, nadeHide: 3,   nadeAim: 5,   nadeFuse: 3.9, nadePredict: 0, nadeFlush: 0, nadeSave: 0, nadeCamp: Infinity,    nadeLead: 0,   nadeFear: 0.55, medCare: 0.3,  medAt: 35, boostAt: 0,  medCancel: 0.3, nadeFight: 0.03, nadeQuick: 0.3, nadeDanger: 0.05, dangerAt: 30, nadePush: 0,    magLow: 0, panSide: 0, healPush: 0.1 },
-    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2], chargeRead: 0.45, chargeWeave: 0.3, reloadBack: 0.4,  hurtBack: 0.5, nadeCare: 0.4,  nadeHide: 2,   nadeAim: 3,   nadeFuse: 2.6, nadePredict: 0.3, nadeFlush: 0.5, nadeSave: 0, nadeCamp: 3,  nadeLead: 0.4, nadeFear: 0.8, medCare: 0.55, medAt: 50, boostAt: 20, medCancel: 0.6, nadeFight: 0.08, nadeQuick: 0.6, nadeDanger: 0.25, dangerAt: 40, nadePush: 0.2,  magLow: 0.4, panSide: 0.4, healPush: 0.35 },
-    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4], chargeRead: 0.85, chargeWeave: 0.8, reloadBack: 0.75, hurtBack: 0.8, nadeCare: 0.75, nadeHide: 1.3, nadeAim: 1.6, nadeFuse: 1.6, nadePredict: 0.7, nadeFlush: 1, nadeSave: 0.5, nadeCamp: 2,  nadeLead: 0.8, nadeFear: 0.95, medCare: 0.85, medAt: 65, boostAt: 40, medCancel: 0.9, nadeFight: 0.15, nadeQuick: 1,   nadeDanger: 0.5,  dangerAt: 50, nadePush: 0.45, magLow: 0.75, panSide: 0.85, healPush: 0.65 },
-    pro:    { run: [0.1, 0.32], stop: 0,    tol: 0.35, shotErr: 0.3, react: 0.07, leadErr: 0.04, track: 24, dodge: 1,    qs: 1,    qsDelay: [0.02, 0.05], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6], chargeRead: 0.95, chargeWeave: 1,   reloadBack: 0.95, hurtBack: 1, nadeCare: 1,    nadeHide: 0.8, nadeAim: 0.5, nadeFuse: 1.05, nadePredict: 1, nadeFlush: 1.5, nadeSave: 1, nadeCamp: 1.2, nadeLead: 1,   nadeFear: 1, medCare: 1,    medAt: 75, boostAt: 55, medCancel: 1, nadeFight: 0.22, nadeQuick: 1.3, nadeDanger: 0.75, dangerAt: 55, nadePush: 0.65, magLow: 1, panSide: 1, healPush: 0.85 },
+    low:    { run: [0.5, 1.2],  stop: 0.25, tol: 0.95, shotErr: 3.2, react: 0.32, leadErr: 0.55, track: 6,  dodge: 0.15, qs: 0.2,  qsDelay: [0.3, 0.6],   qsCare: false, reloadBoth: false, closeMelee: 0.3,  charge: 0.02, gunSense: 0.25, reloadTo: 0.34, replan: 0.5,  seekAfter: 1.6, losCare: 0.4,  panCare: 0.2,  panErr: 25, breakCare: 0.2,  spare: 0,    coverCare: 0.1, coverReach: 6,  sneakCare: 0.1, sneakAt: 0.25, sneakQuiet: 2.5, sneakReads: false, peekCare: 0.1, peekHide: [1, 2],      panRespect: 0.2,  shieldCare: 0.15, showerShots: 5, shieldHold: [0.5, 1], chargeRead: 0.1,  chargeWeave: 0,   reloadBack: 0.15, hurtBack: 0.2, nadeCare: 0.15, nadeHide: 3,   nadeAim: 5,   nadeFuse: 3.9, nadePredict: 0, nadeFlush: 0, nadeSave: 0, nadeCamp: Infinity,    nadeLead: 0,   nadeFear: 0.55, medCare: 0.3,  medAt: 35, boostAt: 0,  medCancel: 0.3, nadeFight: 0.03, nadeQuick: 0.3, nadeDanger: 0.05, dangerAt: 30, nadePush: 0,    magLow: 0, panSide: 0, healPush: 0.1, blastSafe: 0 },
+    medium: { run: [0.3, 0.8],  stop: 0.12, tol: 0.75, shotErr: 1.8, react: 0.22, leadErr: 0.3,  track: 9,  dodge: 0.4,  qs: 0.5,  qsDelay: [0.15, 0.35], qsCare: false, reloadBoth: true,  closeMelee: 0.6,  charge: 0.05, gunSense: 0.55, reloadTo: 0.45, replan: 0.3,  seekAfter: 1,   losCare: 0.7,  panCare: 0.5,  panErr: 14, breakCare: 0.45, spare: 0.75, coverCare: 0.4, coverReach: 9,  sneakCare: 0.3, sneakAt: 0.45, sneakQuiet: 1.8, sneakReads: false, peekCare: 0.4, peekHide: [0.7, 1.4],  panRespect: 0.55, shieldCare: 0.5,  showerShots: 4, shieldHold: [0.6, 1.2], chargeRead: 0.45, chargeWeave: 0.3, reloadBack: 0.4,  hurtBack: 0.5, nadeCare: 0.4,  nadeHide: 2,   nadeAim: 3,   nadeFuse: 2.6, nadePredict: 0.3, nadeFlush: 0.5, nadeSave: 0, nadeCamp: 3,  nadeLead: 0.4, nadeFear: 0.8, medCare: 0.55, medAt: 50, boostAt: 20, medCancel: 0.6, nadeFight: 0.08, nadeQuick: 0.6, nadeDanger: 0.25, dangerAt: 40, nadePush: 0.2,  magLow: 0.4, panSide: 0.4, healPush: 0.35, blastSafe: 5 },
+    high:   { run: [0.2, 0.55], stop: 0.05, tol: 0.5,  shotErr: 0.9, react: 0.14, leadErr: 0.15, track: 14, dodge: 0.7,  qs: 0.85, qsDelay: [0.08, 0.18], qsCare: true,  reloadBoth: true,  closeMelee: 0.85, charge: 0.08, gunSense: 0.85, reloadTo: 0.55, replan: 0.2,  seekAfter: 0.6, losCare: 0.95, panCare: 0.8,  panErr: 7,  breakCare: 0.7,  spare: 1,    coverCare: 0.8, coverReach: 13, sneakCare: 0.6, sneakAt: 0.65, sneakQuiet: 1.2, sneakReads: true,  peekCare: 0.8, peekHide: [0.5, 1],    panRespect: 0.85, shieldCare: 0.85, showerShots: 3, shieldHold: [0.7, 1.4], chargeRead: 0.85, chargeWeave: 0.8, reloadBack: 0.75, hurtBack: 0.8, nadeCare: 0.75, nadeHide: 1.3, nadeAim: 1.6, nadeFuse: 1.6, nadePredict: 0.7, nadeFlush: 1, nadeSave: 0.5, nadeCamp: 2,  nadeLead: 0.8, nadeFear: 0.95, medCare: 0.85, medAt: 65, boostAt: 40, medCancel: 0.9, nadeFight: 0.15, nadeQuick: 1,   nadeDanger: 0.5,  dangerAt: 50, nadePush: 0.45, magLow: 0.75, panSide: 0.85, healPush: 0.65, blastSafe: 7 },
+    pro:    { run: [0.1, 0.32], stop: 0,    tol: 0.35, shotErr: 0.3, react: 0.07, leadErr: 0.04, track: 24, dodge: 1,    qs: 1,    qsDelay: [0.02, 0.05], qsCare: true,  reloadBoth: true,  closeMelee: 1,    charge: 0.1,  gunSense: 1,    reloadTo: 0.67, replan: 0.12, seekAfter: 0.3, losCare: 1,    panCare: 1,    panErr: 3,  breakCare: 0.9,  spare: 1.5,  coverCare: 1,   coverReach: 18, sneakCare: 0.9, sneakAt: 0.85, sneakQuiet: 0.8, sneakReads: true,  peekCare: 1,   peekHide: [0.35, 0.7], panRespect: 0.95, shieldCare: 1,    showerShots: 3, shieldHold: [0.8, 1.6], chargeRead: 0.95, chargeWeave: 1,   reloadBack: 0.95, hurtBack: 1, nadeCare: 1,    nadeHide: 0.8, nadeAim: 0.5, nadeFuse: 1.05, nadePredict: 1, nadeFlush: 1.5, nadeSave: 1, nadeCamp: 1.2, nadeLead: 1,   nadeFear: 1, medCare: 1,    medAt: 75, boostAt: 55, medCancel: 1, nadeFight: 0.22, nadeQuick: 1.3, nadeDanger: 0.75, dangerAt: 55, nadePush: 0.65, magLow: 1, panSide: 1, healPush: 0.85, blastSafe: 8.5 },
   };
   const WIDE_MULT = 2.2;              // "wide" movement = longer runs in one direction
   const SPRAY_BREAK = 0.35;           // radians (~20°) off aim before it lets go of the trigger
@@ -191,6 +192,7 @@
   const CLASS_RANGE = { SHOTGUN: [0, 10], SMG: [0, 14], PISTOL: [0, 14], ASSAULT: [6, 26], LMG: [6, 26], DMR: [12, 99], SNIPER: [14, 99] };
   const RANGE_FADE = 6;
   const USELESS = -0.5;               // a gun this badly suited to the range isn't worth changing to
+  const BLAST_FAR = 22;               // explosive rounds (the USAS) suit anything from its safe distance out to here
   const PREFER_BY = 0.25;             // one gun has to suit the range this much better to be preferred
   const MAG_LOW = 0.35;                // share of an automatic's clip that counts as nearly empty
 
@@ -537,9 +539,12 @@
     gunSuit(slot, dist) {
       const d = SV.defOf(this.p.slots[slot].type);
       if (!d || d.kind !== 'gun') return -Infinity;
-      const r = CLASS_RANGE[d.cls] || [0, 99];
+      const r = d.bullet.onHit ? [this.S.blastSafe, BLAST_FAR] : CLASS_RANGE[d.cls] || [0, 99];
       return 1 - Math.max(0, r[0] - dist, dist - r[1]) / RANGE_FADE;
     }
+
+    // Too close to fire this gun's explosive rounds at you without catching itself in the blast.
+    blastClose(d, dist) { return d.kind === 'gun' && !!d.bullet.onHit && dist < this.S.blastSafe; }
 
     // The slot that clearly suits this range better, or null when both do about as well: a shotgun close up, a
     // sniper far away, an assault rifle in between.
@@ -612,8 +617,14 @@
         return;
       }
       this.swapT = null;
-      // Shielding: one careful shot at a time suits a single-shot gun, if it has one.
       const od = SV.defOf(o.type);
+      // Too close for explosive rounds: the other gun, if that one is safe.
+      if (this.blastClose(d, dist) && od && od.kind === 'gun' && !od.bullet.onHit && o.ammo > 0 && !p.bursts.length && !p.reloading) {
+        this.qsT = null; this.spraying = false;
+        p.switchTo(other);
+        return;
+      }
+      // Shielding: one careful shot at a time suits a single-shot gun, if it has one.
       if (this.shield && d.fireMode !== 'single' && od && od.fireMode === 'single' && o.ammo > 0 && !p.bursts.length && !p.reloading) {
         this.qsT = null; this.spraying = false;
         p.switchTo(other);
@@ -1396,6 +1407,8 @@
         this.errNow += (this.errGoal - this.errNow) * Math.min(1, ERR_SMOOTH * dt);
       }
       p.dir = { x: Math.cos(this.aimAng + this.errNow), y: Math.sin(this.aimAng + this.errNow) };
+      // The USAS's rounds go off where it aims, so it puts its crosshair on you, about as far off as its aim is.
+      if (!throwing && d.kind === 'gun' && d.toMouseHit) p.toMouseLen = Math.max(0, Math.hypot(ax - p.pos.x, ay - p.pos.y) + this.errNow * dist);
 
       // ---- shooting ----
       i.shootHold = false;
@@ -1415,8 +1428,13 @@
           // Part-empty, in view: under direct attack it fires back, which ends the reload, and a sneaked
           // shell-by-shell reload never delays a ready shot.
           && !(ammo > 0 && !this.sightBlocked && (this.attacked || (this.sneak && d.maxReload < d.maxClip)));
+        const blastClose = this.blastClose(d, dist);
         const holdFire = (this.sightBlocked && !this.shootBlind && !this.breaking) || this.panWait    // don't waste shots on a tree or a pan
-          || (this.shield && !this.shieldPeek);                                                    // shielding: it only fires when it peeks
+          || (this.shield && !this.shieldPeek)                                                     // shielding: it only fires when it peeks
+          || blastClose;                                                                           // its own explosive rounds would hurt it
+        // ...so it gives itself room.
+        if (blastClose && !this.blastBacked) this.backOff(dist);
+        this.blastBacked = blastClose;
         const hasAmmo = d.kind !== 'gun' || (ammo > 0 && !midReload && !holdFire);
         // Automatic guns are mostly mag dumped: once it starts, it keeps the trigger held until the
         // mag is empty, you're out of range or its aim is way off. Sometimes it's just a short burst.

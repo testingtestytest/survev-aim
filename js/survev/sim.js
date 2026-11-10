@@ -63,6 +63,9 @@
   const GROUND_DRAG = 2.3;       // projectile.ts
   const HAND_OFFSET = { x: 0.5, y: 1 };   // weaponManager.throwThrowable: where it leaves the hand (survev's y is up)
   const SPAWN_HEIGHT = 0.5;      // weaponManager.throwThrowable
+  const MAX_DECALS = 32;         // scorch marks kept (the oldest goes)
+  // The frag's shrapnel is SV.SHRAPNEL itself, so it can still be told apart by what it is.
+  SV.EXPLOSIONS.explosion_frag.shrapnel = SV.SHRAPNEL;
 
   // An endless field at the game's density: count = density * area / 250000 (map.ts genDensitySpawn).
   class ObstacleField {
@@ -495,10 +498,11 @@
     // Can this player's bullets, blasts and swings hurt that one? Yourself yes (reflections, your own grenade), a teammate no.
     canHurt(other) { return other === this || !this.team || this.team !== other.team; }
 
-    damage(amount, srcDef) {
+    // blast: an explosion, which never counts as a headshot (player.ts isExplosion)
+    damage(amount, srcDef, blast) {
       if (this.dead || this.safeT > 0) return null;
       let dmg = amount, head = false;
-      if (srcDef && srcDef.kind === 'gun' && srcDef.headshotMult != null) {
+      if (srcDef && srcDef.kind === 'gun' && srcDef.headshotMult != null && !blast) {
         head = Math.random() < C.player.headshotChance;
         if (head) dmg *= srcDef.headshotMult;
       }
@@ -678,6 +682,8 @@
           if (len < clipLen) { clipLen = len; clip = { x: px, y: py, nx, ny }; }
         }
       }
+      // weaponManager.fireWeapon: a gun with toMouseHit (the USAS) fires its shells only as far as where you aim
+      const reach = d.toMouseHit ? Math.max(this.toMouseLen - d.barrelLength, 0) : null;
       for (let k = 0; k < d.bulletCount; k++) {
         const deviation = firstShotAccuracy ? 0 : rand(-0.5, 0.5) * spread;
         const shotDir = rotate(dir, deviation * DEG);
@@ -694,7 +700,7 @@
             if (t < tl) { const keep = t - 0.1; start = { x: gunPos.x + ux * keep, y: gunPos.y + uy * keep }; }
           }
         }
-        this.world.fireBullet(this, d, start, shotDir, k === 0, shotId);
+        this.world.fireBullet(this, d, start, shotDir, k === 0, shotId, 0, 1, reach);
       }
       this.recoilVis = 1;
       if (this.events.shot) this.events.shot(this, d);
@@ -893,9 +899,11 @@
 
     // server explosion.ts: rays out from the center. Each thing is damaged once, by the first ray to reach it, and
     // only tall obstacles stop a ray, so a low rock doesn't protect you from a grenade landing behind it.
-    explode(pos, owner) {
-      const E = SV.FRAG.explosion, R = E.rad.max, A = this.audio;
-      const shotId = (this.shotSeq = (this.shotSeq || 0) + 1);
+    // type: which explosion (SV.EXPLOSIONS), src: what caused it, for the damage and the stats, shotId: the shot it
+    // belongs to, so a USAS shell's hit and its blast count as one hit.
+    explode(pos, owner, type = 'explosion_frag', src = SV.FRAG, shotId = null) {
+      const E = SV.EXPLOSIONS[type], R = E.rad.max, A = this.audio;
+      if (shotId == null) shotId = (this.shotSeq = (this.shotSeq || 0) + 1);
       const obstacles = this.field ? this.field.near(pos.x, pos.y, R + 3).filter((o) => !o.dead) : [];
       const players = this.players.filter((p) => !p.dead && owner.canHurt(p));
       const things = [...obstacles.map((o) => ({ o, x: o.x, y: o.y, r: o.r })), ...players.map((p) => ({ p, x: p.pos.x, y: p.pos.y, r: p.rad }))];
@@ -918,8 +926,8 @@
               th.o.damage(dmg * E.obstacleDamage);
               if (A && th.o.dead) A.play(th.o.def.sound.explode, 'sfx', th.o);
             } else {
-              const res = th.p.damage(dmg, SV.FRAG);
-              if (res && owner.events.hit) owner.events.hit(owner, th.p, res, SV.FRAG, shotId);
+              const res = th.p.damage(dmg, src, true);
+              if (res && owner.events.hit) owner.events.hit(owner, th.p, res, src, shotId);
             }
           }
           if (th.o && th.o.height > BLAST_STOP) break;
@@ -927,26 +935,27 @@
       }
       for (let n = 0; n < E.shrapnelCount; n++) {
         const a = Math.random() * Math.PI * 2;
-        this.fireBullet(owner, SV.SHRAPNEL, pos, { x: Math.cos(a), y: Math.sin(a) }, false, shotId, 0, Math.random());
+        this.fireBullet(owner, E.shrapnel, pos, { x: Math.cos(a), y: Math.sin(a) }, false, shotId, 0, Math.random());
       }
       if (A) A.play(E.sound, 'sfx', pos, 0, 2);
-      this.booms.push({ x: pos.x, y: pos.y, born: this.time });
-      this.decals.push({ x: pos.x, y: pos.y, rot: Math.random() * Math.PI * 2 });
-      if (this.decals.length > 16) this.decals.shift();
+      this.booms.push({ x: pos.x, y: pos.y, born: this.time, E });
+      this.decals.push({ x: pos.x, y: pos.y, rot: Math.random() * Math.PI * 2, E });
+      if (this.decals.length > MAX_DECALS) this.decals.shift();
     }
 
-    // bulletBarn.fireBullet + Bullet constructor (no perks, no variance on gun bullets)
-    fireBullet(owner, gunDef, pos, dir, shotFx, shotId, reflectCount = 0, varianceT = 1) {
+    // bulletBarn.fireBullet + Bullet constructor (no perks, no variance on gun bullets). clip: how far it may go
+    // at most (clipDistance), for a gun that fires to where you aim.
+    fireBullet(owner, gunDef, pos, dir, shotFx, shotId, reflectCount = 0, varianceT = 1, clip = null) {
       const b = gunDef.bullet;
       const variance = 1 + varianceT * b.variance;
       const distAdjIdx = b.noDistAdj ? 8 : randInt(0, 16);
       const distAdj = remap(distAdjIdx, 0, 16, -1, 1);
-      const base = b.distance / Math.pow(C.bulletReflectDistDecay, reflectCount);
+      const base = clip != null ? Math.min(b.distance, clip) : b.distance / Math.pow(C.bulletReflectDistDecay, reflectCount);
       const distance = clamp(base * variance + distAdj, 0, 1e6);
       this.bullets.push({
         owner, gunDef, pos: { ...pos }, start: { ...pos }, dir: { ...dir },
         speed: b.speed * variance, distance, traveled: 0, damage: b.damage, falloff: b.falloff, alive: true, shotFx,
-        collided: false, scale: 1, shotId, born: this.time, reflectCount, varianceT,
+        collided: false, scale: 1, shotId, born: this.time, reflectCount, varianceT, clipped: clip != null,
       });
     }
 
@@ -970,8 +979,10 @@
         for (const q of this.projectiles) this.updateProjectile(q, dt);
         this.projectiles = this.projectiles.filter((q) => !q.dead);
       }
-      while (this.booms.length && this.time - this.booms[0].born > SV.FRAG.burst.life) this.booms.shift();
-      const bounced = [], A = this.audio;
+      while (this.booms.length && this.time - this.booms[0].born > this.booms[0].E.burst.life) this.booms.shift();
+      const bounced = [], blasts = [], A = this.audio;
+      // bullet.ts: a round with an onHit explosion (the USAS) goes off wherever it stops, unless a pan sent it back
+      const stopped = (b) => { if (b.gunDef.bullet.onHit) blasts.push(b); };
       for (const b of this.bullets) {
         if (!b.alive) { if (b.collided) b.scale = Math.max(b.scale - dt * 6, 0); continue; }
         if (A && !b.whizHeard && b.owner !== A.me && Math.hypot(b.pos.x - A.me.pos.x, b.pos.y - A.me.pos.y) < 7.5) {   // client bullet.ts
@@ -1005,6 +1016,7 @@
             this.hitObstacle(ob, dmg * b.gunDef.bullet.obstacleDamage, ob.def.sound.bullet);
             b.alive = false;
             b.collided = true;
+            stopped(b);
             continue;
           }
         }
@@ -1015,8 +1027,10 @@
           b.collided = true;
           if (b.reflectCount < C.bulletMaxReflect) {   // bullet.reflect
             const dot = b.dir.x * pan.normal.x + b.dir.y * pan.normal.y;
-            bounced.push({ b, pos: { ...b.pos }, dir: { x: b.dir.x - 2 * dot * pan.normal.x, y: b.dir.y - 2 * dot * pan.normal.y } });
-          }
+            // a round fired to where you aimed only goes on for what it had left
+            const clip = b.clipped ? Math.max(1, b.distance - b.traveled) / Math.pow(C.bulletReflectDistDecay, b.reflectCount) : null;
+            bounced.push({ b, clip, pos: { ...b.pos }, dir: { x: b.dir.x - 2 * dot * pan.normal.x, y: b.dir.y - 2 * dot * pan.normal.y } });
+          } else stopped(b);
           if (A) A.group(SV.MELEE.pan.sound.bullet, b.pos);
           if (panBy.events.reflect) panBy.events.reflect(panBy, b);
           continue;
@@ -1033,14 +1047,17 @@
           if (res && b.owner.events.hit) b.owner.events.hit(b.owner, hit, res, b.gunDef, b.shotId);
           b.alive = false;
           b.collided = true;           // client: tracer shrinks out after a hit
+          stopped(b);
           continue;
         }
         b.pos.x = nx; b.pos.y = ny;
         b.traveled += step;
-        if (b.traveled >= b.distance - 1e-6) b.alive = false;   // client: hidden at max range
+        if (b.traveled >= b.distance - 1e-6) { b.alive = false; stopped(b); }   // client: hidden at max range
       }
       this.bullets = this.bullets.filter((b) => b.alive || (b.collided && b.scale > 0));
-      for (const r of bounced) this.fireBullet(r.b.owner, r.b.gunDef, r.pos, r.dir, false, r.b.shotId, r.b.reflectCount + 1, r.b.varianceT);
+      for (const r of bounced) this.fireBullet(r.b.owner, r.b.gunDef, r.pos, r.dir, false, r.b.shotId, r.b.reflectCount + 1, r.b.varianceT, r.clip);
+      // a little short of where it stopped, so it doesn't go off inside what it hit
+      for (const b of blasts) this.explode({ x: b.pos.x - b.dir.x * 0.1, y: b.pos.y - b.dir.y * 0.1 }, b.owner, b.gunDef.bullet.onHit, b.gunDef, b.shotId);
     }
   }
 

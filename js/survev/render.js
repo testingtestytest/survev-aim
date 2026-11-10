@@ -280,8 +280,7 @@
     }
   }
   const remap = (v, a, b, x, y) => x + ((Math.max(a, Math.min(b, v)) - a) / (b - a)) * (y - x);
-  const BURST_TINT = 0xfb6200;             // particles.ts explosionBurst: hsvToRgb(0.065, 1, 0.98)
-  const SHAKE = { str: 0.2, dur: 0.35, near: 10, far: 40 };   // explosion.ts frag, camera.ts addShake
+  const SHAKE = { near: 10, far: 40 };     // camera.ts addShake; each explosion has its own strength and length
   // client objects/obstacle.ts: 5 to 10 pieces thrown out when something breaks, and particles.ts rockBreak and woodLog.
   const DEBRIS = {
     stone: { image: 'map-stone-01', life: [0.8, 1], drag: [1, 5], rotVel: 0, start: [0.07, 0.12], end: [0.05, 0.1], tint: (v) => [v, v, v], value: [0.5, 0.75] },
@@ -343,26 +342,26 @@
     }
   }
   function drawDecals(g, world, X, Y, S) {
-    const D = SV.FRAG.decal;
     for (const q of world.decals) {
+      const D = q.E.decal;
       g.save();
       g.globalAlpha = D.alpha;
       g.translate(X(q.x), Y(q.y));
       g.rotate(q.rot);
       g.scale(S, S);
-      sprite(g, D.sprite, 0x000000, 0.5, 0.5, D.scale, D.scale);
+      sprite(g, D.sprite, D.tint, 0.5, 0.5, D.scale, D.scale);
       g.restore();
     }
   }
   function drawBooms(g, world, X, Y, S) {
-    const B = SV.FRAG.burst;
     for (const q of world.booms) {
+      const B = q.E.burst;
       const t = Math.min(1, (world.time - q.born) / B.life), s = B.scale[0] + (B.scale[1] - B.scale[0]) * t;
       g.save();
       g.globalAlpha = Math.max(0, Math.min(1, 1 - (t - B.fadeFrom[0]) / (B.fadeFrom[1] - B.fadeFrom[0])));
       g.translate(X(q.x), Y(q.y));
       g.scale(S, S);
-      sprite(g, B.image, BURST_TINT, 0.5, 0.5, s, s);
+      sprite(g, B.image, B.tint, 0.5, 0.5, s, s);
       g.restore();
     }
   }
@@ -370,7 +369,7 @@
     let int = 0;
     for (const q of world.booms) {
       const k = Math.max(0, Math.min(1, (SHAKE.far - Math.hypot(cam.x - q.x, cam.y - q.y)) / (SHAKE.far - SHAKE.near)));
-      int = Math.max(int, SHAKE.str * (1 - Math.min(1, (world.time - q.born) / SHAKE.dur)) * k);
+      int = Math.max(int, q.E.shake.str * (1 - Math.min(1, (world.time - q.born) / q.E.shake.dur)) * k);
     }
     return int;
   }
