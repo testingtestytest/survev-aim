@@ -537,6 +537,16 @@
     const k = row.findIndex((b) => Math.hypot(x - b.cx, y - b.cy) <= b.r + S.hit);
     return k < 0 ? null : scopes[k];
   };
+  // ui2.ts InteractionType.Cancel: phones have no cancel key, so using an item puts a Cancel button on screen, just
+  // under you, and never lower than above the ammo, where it would be in the way of the sticks.
+  function cancelBox(W, H) {
+    const L = hudLayout(W, H, true), w = 116, h = 32;
+    return { x: W / 2 - w / 2, y: Math.min(L.clip.y - 14 - h, H / 2 + 44), w, h };
+  }
+  SV.cancelAt = (W, H, x, y) => {
+    const b = cancelBox(W, H), m = T_HIT_MARGIN;
+    return x >= b.x - m && x <= b.x + b.w + m && y >= b.y - m && y <= b.y + b.h + m;
+  };
   SV.touchLayout = (W, H) => {
     const L = hudLayout(W, H, true);
     return { ...L, slots: L.slotY.map((y) => ({ x: L.slotX - L.slotW, y, w: L.slotW, h: L.slotH })) };
@@ -718,6 +728,15 @@
     g.restore();
   }
 
+  function drawCancel(g, W, H, me, L) {
+    if (!L.touch || !me.action || me.action.type !== 'use') return;
+    const b = cancelBox(W, H);
+    rbox(g, b.x, b.y, b.w, b.h, 6, 'rgba(0,0,0,0.5)');
+    g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2;
+    g.beginPath(); if (g.roundRect) g.roundRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2, 5); else g.rect(b.x + 1, b.y + 1, b.w - 2, b.h - 2); g.stroke();
+    text(g, 'Cancel', W / 2, b.y + b.h / 2 + 1, 18, { align: 'center', base: 'middle', shadow: false });
+  }
+
   // The scope buttons (.ui-zoom). The one in use grows over 100ms, and the mouse brightens the others (.ui-zoom-inactive:hover).
   const scopeText = {};                // measured once per label and size: this runs every frame
   function drawScopes(g, W, L, info) {
@@ -823,6 +842,7 @@
     drawVitals(g, W, H, me, L, info);
     drawAmmo(g, me, L);
     drawPie(g, W, me, L);
+    drawCancel(g, W, H, me, L);
     drawItems(g, W, H, me, L, info);
     drawTop(g, W, me, L, info);
     if (!L.touch && info.timeline) {

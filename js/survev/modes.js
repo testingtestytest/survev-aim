@@ -466,6 +466,8 @@
         const { W, H } = api.size;
         const hit = SV.scopeAt(W, H, !!touch, SCOPES, scope, x, y);
         if (hit) { if (hit !== scope) setScope(hit); return true; }
+        // Phones: the Cancel button that shows while you use an item (ui2.ts InteractionType.Cancel).
+        if (touch && me.action && me.action.type === 'use' && SV.cancelAt(W, H, x, y)) { me.cancelAction(); return true; }
         const item = SV.itemAt(W, H, !!touch, x, y);
         if (!item) return false;
         // The one you're using cancels it, as a second way to do what the cancel key does.
